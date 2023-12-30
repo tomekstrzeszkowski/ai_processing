@@ -1,7 +1,7 @@
 # AI Processing
 
 Download pre-trained models:
- - yolov5n.pt
+ - yolov8n.pt
   - Export to onnx `yolo export model=path/to/best.pt format=onnx opset=12`
 # Export
 
