@@ -1,1 +1,17 @@
-# ai_processing
+# AI Processing
+
+Download pre-trained models:
+ - yolov5n.pt
+  - Export to onnx `yolo export model=path/to/best.pt format=onnx opset=12`
+# Export
+
+One of the option
+
+`conda env export > environment.yml`
+`conda list --explicit > spec_file_root.txt`
+
+# Update
+Choose one
+
+`conda env update --name root --file environment.yml`
+`conda create --name myenv2 --file spec_file.txt`
