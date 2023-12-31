@@ -50,38 +50,46 @@ def detect_people_yolo8(net, original_image):
             ]
 
 
-def detect_people_yolo3(net, image):
-    height, width = image.shape[0], image.shape[1]
-    blob = cv2.dnn.blobFromImage(image, 1 / 255.0, (416, 416), swapRB=True, crop=False)
+def detect_yolo8(net, original_image):
+    [height, width, _] = original_image.shape
+    # Prepare a square image for inference
+    length = max((height, width))
+    image = np.zeros((length, length, 3), np.uint8)
+    image[0:height, 0:width] = original_image
+
+    # Calculate scale factor
+    scale = length / 640
+
+    blob = cv2.dnn.blobFromImage(
+        image, scalefactor=1 / 255, size=(640, 640), swapRB=True
+    )
     net.setInput(blob)
 
-    # Perform forward propagation
-    output_layer_name = net.getUnconnectedOutLayersNames()
-    output_layers = net.forward(output_layer_name)
+    # Perform inference
+    outputs = net.forward()
 
-    # Loop over the output layers
-    for output in output_layers:
-        # Loop over the detections
-        for detection in output:
-            # Extract the class ID and confidence of the current detection
-            scores = detection[5:]
-            class_id = np.argmax(scores)
-            confidence = scores[class_id]
+    # Prepare output array
+    output_layers = np.array([cv2.transpose(outputs[0])])
 
-            # Only keep detections with a high confidence
-            if class_id == 0 and confidence > 0.9:
-                # Object detected
-                center_x = int(detection[0] * width)
-                center_y = int(detection[1] * height)
-                w = int(detection[2] * width)
-                h = int(detection[3] * height)
+    # Prepare output array
+    outputs = np.array([cv2.transpose(outputs[0])])
+    rows = outputs.shape[1]
 
-                # Rectangle coordinates
-                x = int(center_x - w / 2)
-                y = int(center_y - h / 2)
-
-                # Add the detection to the list of people
-                yield (x, y, w, h)
+    # Iterate through output to collect bounding boxes, confidence scores, and class IDs
+    for i in range(rows):
+        classes_scores = outputs[0][i][4:]
+        (minScore, maxScore, minClassLoc, (x, maxClassIndex)) = cv2.minMaxLoc(
+            classes_scores
+        )
+        if maxScore >= 0.3 and maxClassIndex in (yolo_object.PERSON, yolo_object.CAR):
+            yield [
+                int((outputs[0][i][0] - (0.5 * outputs[0][i][2])) * scale),
+                int((outputs[0][i][1] - (0.5 * outputs[0][i][3])) * scale),
+                int(outputs[0][i][2] * scale),
+                int(outputs[0][i][3] * scale),
+                maxClassIndex,
+                scale,
+            ]
 
 
 def make_ellipse_mask(size, box, ellipse_blur=10):
@@ -97,11 +105,10 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # face detector
 mtcnn = MTCNN(keep_all=True, device=device)
 # human detecter
-# net = cv2.dnn.readNet("./yolov3.weights", "./yolov3.cfg")
 # hog = cv2.HOGDescriptor()
 # hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
 # model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True)
-net = cv2.dnn.readNetFromONNX("./yolov8n.onnx")
+model = cv2.dnn.readNetFromONNX("./yolov8n.onnx")
 font = ImageFont.truetype("arial.ttf", 36)
 # video = mmcv.VideoReader(file_name)
 # frames = [Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)) for frame in video]
@@ -129,17 +136,28 @@ while frames_to_read := True:
     )
     draw = ImageDraw.Draw(frame_draw)
     # detect humans
-    humans = list(detect_people_yolo8(net, frame_array))
+    objects = list(detect_yolo8(model, frame_array))
     # humans, _ = hog.detectMultiScale(
     #     frame_array, winStride=(4, 4), padding=(3, 3), scale=1.1
     # )
-    if humans is not None:
+    if objects is not None:
         is_detected = True
-        for x0, y0, w, h in humans:
+        for x0, y0, w, h, type_, scale in objects:
             cv2.rectangle(frame_array, (x0, y0), (x0 + w, y0 + h), (0, 0, 255), 2)
+
+            frame_draw = Image.fromarray(frame_array)
+            draw = ImageDraw.Draw(frame_draw)
+
+            draw.text(
+                (x0, y0),
+                f"Detected {yolo_object.DETECTION_TO_VERBOSE[type_]}",
+                color="white",
+                font=font,
+            )
+            frame_array = np.array(frame_draw)
         frame_draw = Image.fromarray(frame_array)
         draw = ImageDraw.Draw(frame_draw)
-        draw.text((20, 20), f"Humans: {len(humans)}", color="white", font=font)
+        draw.text((20, 20), f"Objects: {len(objects)}", color="white", font=font)
 
     # detect faces
     # faces, _ = mtcnn.detect(frame_array)
