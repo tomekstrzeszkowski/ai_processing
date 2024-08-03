@@ -15,3 +15,9 @@ Choose one
 
 `conda env update --name root --file environment.yml`
 `conda create --name myenv2 --file spec_file.txt`
+
+
+# Example output
+
+https://github.com/user-attachments/assets/d10d34a4-d059-4db3-b170-7cd5675129bf
+
