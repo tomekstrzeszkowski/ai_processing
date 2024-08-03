@@ -19,5 +19,5 @@ Choose one
 
 # Example output
 
-https://github.com/user-attachments/assets/d10d34a4-d059-4db3-b170-7cd5675129bf
+![ezgif-6-96680c2bdf](https://github.com/user-attachments/assets/b63d2232-1bac-412c-a81e-795408ca2fff)
 
