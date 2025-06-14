@@ -1,0 +1,4 @@
+yolov8n.onnx
+venv/*
+*.py[c|o]
+*_processed.mp4

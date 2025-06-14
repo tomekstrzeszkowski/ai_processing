@@ -1,0 +1,1 @@
+Get Yolo8 from: https://huggingface.co/SpotLab/YOLOv8Detection/blob/3005c6751fb19cdeb6b10c066185908faf66a097/yolov8n.onnx
