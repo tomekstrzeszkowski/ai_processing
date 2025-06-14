@@ -82,3 +82,8 @@ class YoloObject(IntEnum):
     TEDDY_BEAR = 77
     HAIR_DRIER = 78
     TOOTHBRUSH = 79
+
+YOLO_MODEL_NAME_TO_SCALE_TO_ORIGINAL = {
+    "./yolo11n.onnx": 1,
+    "./yolov8n.onnx": 640,
+}

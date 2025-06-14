@@ -3,10 +3,11 @@ import torch
 import numpy as np
 import cv2
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
-from yolo_object import YoloObject
+from yolo_object import YoloObject, YOLO_MODEL_NAME_TO_SCALE_TO_ORIGINAL
 
 
 file_name = "video.mp4"
+YOLO_MODEL_NAME = "./yolo11n.onnx"
 
 
 def detect_yolo8(net, original_image):
@@ -44,10 +45,11 @@ def detect_yolo8(net, original_image):
             height_norm = outputs[0][i][3]    # normalized height (0-1)
             
             # Convert to pixel coordinates in the 640x640 space, then scale to original
-            center_x = center_x_norm * size * scale
-            center_y = center_y_norm * size * scale
-            box_width = width_norm * size * scale
-            box_height = height_norm * size * scale
+            resize = YOLO_MODEL_NAME_TO_SCALE_TO_ORIGINAL.get(YOLO_MODEL_NAME, 1)
+            center_x = center_x_norm * resize * scale
+            center_y = center_y_norm * resize * scale
+            box_width = width_norm * resize * scale
+            box_height = height_norm * resize * scale
             
             # Convert center coordinates to top-left corner
             x0 = int(center_x - (box_width / 2))
@@ -70,7 +72,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # face detector
 mtcnn = MTCNN(keep_all=True, device=device)
 # human detecter
-model = cv2.dnn.readNetFromONNX("./yolov8n.onnx")
+model = cv2.dnn.readNetFromONNX(YOLO_MODEL_NAME)
 font = ImageFont.truetype("arial.ttf", 36)
 frames_tracked = []
 video = cv2.VideoCapture(file_name)
