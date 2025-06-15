@@ -1,6 +1,10 @@
+import os
 import cv2
 import numpy as np
 import time
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 def process_frame(frame):
@@ -28,7 +32,7 @@ def process_frame(frame):
     return processed_frame, gray, edges
 
 def main():
-    url = "rtsp://admin:pass-here!@192.168.1.192:554/cam/realmonitor?channel=1&subtype=0"
+    url = os.getenv("IP_CAM_URL", "copy .env.template")
     print(f"Connecting to camera: {url}")
     
     # Create VideoCapture object
