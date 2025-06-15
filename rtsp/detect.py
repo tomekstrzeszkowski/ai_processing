@@ -4,59 +4,9 @@ import numpy as np
 import cv2
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from yolo_object import YoloObject, YOLO_MODEL_NAME_TO_SCALE_TO_ORIGINAL
-
+from detector import Detector
 
 file_name = "video.mp4"
-YOLO_MODEL_NAME = "./yolo11n.onnx"
-
-
-def detect_yolo(net, original_image):
-    [height, width, _] = original_image.shape
-    # Prepare a square image for inference
-    length = max((height, width))
-    image = np.zeros((length, length, 3), np.uint8)
-    image[0:height, 0:width] = original_image
-
-    # Calculate scale factor
-    size = 640
-    scale = length / size
-    blob = cv2.dnn.blobFromImage(
-        image, scalefactor=1 / 255, size=(size, size), swapRB=True
-    )
-    net.setInput(blob)
-    # Perform inference
-    outputs = net.forward()
-    # Prepare output array
-    output_layers = np.array([cv2.transpose(outputs[0])])
-    # Prepare output array
-    outputs = np.array([cv2.transpose(outputs[0])])
-    rows = outputs.shape[1]
-
-    # Iterate through output to collect bounding boxes, confidence scores, and class IDs
-    for i in range(rows):
-        classes_scores = outputs[0][i][4:]
-        (minScore, maxScore, minClassLoc, (x, maxClassIndex)) = cv2.minMaxLoc(
-            classes_scores
-        )
-        if maxScore >= 0.3 and maxClassIndex in (YoloObject.PERSON.value, YoloObject.CAR.value):
-            center_x_norm = outputs[0][i][0]  # normalized center x (0-1)
-            center_y_norm = outputs[0][i][1]  # normalized center y (0-1)
-            width_norm = outputs[0][i][2]     # normalized width (0-1)
-            height_norm = outputs[0][i][3]    # normalized height (0-1)
-            
-            # Convert to pixel coordinates in the 640x640 space, then scale to original
-            resize = YOLO_MODEL_NAME_TO_SCALE_TO_ORIGINAL.get(YOLO_MODEL_NAME, 1)
-            center_x = center_x_norm * resize * scale
-            center_y = center_y_norm * resize * scale
-            box_width = width_norm * resize * scale
-            box_height = height_norm * resize * scale
-            
-            # Convert center coordinates to top-left corner
-            x0 = int(center_x - (box_width / 2))
-            y0 = int(center_y - (box_height / 2))
-            w = int(box_width)
-            h = int(box_height)
-            yield [x0, y0, w, h, maxClassIndex, maxScore]
 
 
 def make_ellipse_mask(size, box, ellipse_blur=10):
@@ -73,7 +23,7 @@ if __name__ == "__main__":
     # face detector
     mtcnn = MTCNN(keep_all=True, device=device)
     # human detecter
-    model = cv2.dnn.readNetFromONNX(YOLO_MODEL_NAME)
+    detector = Detector()
     font = ImageFont.truetype("arial.ttf", 36)
     frames_tracked = []
     video = cv2.VideoCapture(file_name)
@@ -99,7 +49,7 @@ if __name__ == "__main__":
         draw = ImageDraw.Draw(frame_draw)
         # detect humans
         detected = 0
-        for x0, y0, w, h, type_, scale in detect_yolo(model, frame_array):
+        for x0, y0, w, h, type_, scale in detector.detect_yolo_with_largest_box(frame_array):
             detected += 1
             cv2.rectangle(frame_array, (x0, y0), (x0 + w, y0 + h), (0, 0, 255), 2)
             cv2.putText(
