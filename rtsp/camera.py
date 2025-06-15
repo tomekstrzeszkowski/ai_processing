@@ -19,11 +19,11 @@ def process_frame(frame, detector):
         cv2.putText(
             processed_frame,
             f"Detected {detector.yolo_class_id_to_verbose[type_]}!",
-            (x0, y0+20),
+            (x0+10, y0+20),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
+            0.5,
             (0, 255, 0),
-            1,
+            2,
         )
         detected_objects += 1
     if detected_objects:
@@ -46,6 +46,7 @@ def main():
 
     
     # Create VideoCapture object
+    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "video_codec;h264_cuvid"
     video = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
     
     # Set buffer size to reduce latency
@@ -73,28 +74,29 @@ def main():
     start_time = time.time()
 
     #optimize
-    skip_frames = 3
+    skip_frames = 10
     target_width = int(width * 4)
     target_height = int(height * 4)
     video.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     video.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-    video.set(cv2.CAP_PROP_FPS, 10)
+    video.set(cv2.CAP_PROP_FPS, 3)
     
     try:
         while True:
             frames_to_read, frame = video.read()
+            frame_count += 1
             
             if not frames_to_read:
                 print("Failed to grab frame")
                 break
+
+            if frame_count % (skip_frames + 1) != 0:
+                continue
             small_frame = cv2.resize(frame, (target_width, target_height))
             processed_frame = process_frame(small_frame, detector)
             
             # Display frames
             cv2.imshow('Processed', processed_frame)
-            frame_count += 1
-            if frame_count % (skip_frames + 1) != 0:
-                continue
             elapsed_time = time.time() - start_time
             if elapsed_time > 1.0:  # Update every second
                 actual_fps = frame_count / elapsed_time
