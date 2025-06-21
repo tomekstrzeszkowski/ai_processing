@@ -5,6 +5,7 @@ import cv2
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from yolo_object import YoloObject, YOLO_MODEL_NAME_TO_SCALE_TO_ORIGINAL
 from detector import Detector
+from saver import write_frame_to_shared_memory
 
 file_name = "video.mp4"
 
@@ -83,6 +84,10 @@ if __name__ == "__main__":
         #     mask_box = make_ellipse_mask(frame_draw.size, face)
         #     frame_draw.paste(blurred, mask=mask_box)
         #     draw.rectangle(face.tolist(), outline="red")
+        frame_bgr = cv2.cvtColor(np.array(frame_draw), cv2.COLOR_RGB2BGR)
+        success, buffer = cv2.imencode('.jpg', frame_bgr)
+        if success:
+            write_frame_to_shared_memory(buffer)
         frames_tracked.append(frame_draw.resize((width, height), Image.BILINEAR))
 
 
