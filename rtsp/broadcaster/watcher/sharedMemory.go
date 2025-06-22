@@ -1,7 +1,6 @@
 package watcher
 
 import (
-	"encoding/binary"
 	"fmt"
 	"log"
 	"os"
@@ -53,17 +52,7 @@ func (smr *SharedMemoryReceiver) readFrameFromShm() ([]byte, error) {
 	if len(data) < 4 {
 		return nil, fmt.Errorf("invalid frame data: too short")
 	}
-
-	// Read frame size from header
-	frameSize := binary.BigEndian.Uint32(data[:4])
-
-	if len(data) < int(4+frameSize) {
-		return nil, fmt.Errorf("invalid frame data: incomplete")
-	}
-
-	// Extract frame data
-	frameData := data[4 : 4+frameSize]
-	return frameData, nil
+	return data, nil
 }
 func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 	log.Println("Starting shared memory watcher...")
