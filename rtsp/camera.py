@@ -1,8 +1,10 @@
 import os
 import cv2
+import numpy as np
 import time
 from detector import Detector
 from dotenv import load_dotenv
+from saver import write_frame_to_shared_memory
 
 load_dotenv()
 
@@ -97,6 +99,10 @@ def main():
             
             # Display frames
             cv2.imshow('Processed', processed_frame)
+            processed_frame_bgr = cv2.cvtColor(np.array(processed_frame), cv2.COLOR_RGB2BGR)
+            success, buffer = cv2.imencode('.jpg', processed_frame_bgr)
+            if success:
+                write_frame_to_shared_memory(buffer)
             elapsed_time = time.time() - start_time
             if elapsed_time > 1.0:  # Update every second
                 actual_fps = frame_count / elapsed_time

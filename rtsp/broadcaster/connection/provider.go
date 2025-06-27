@@ -2,7 +2,6 @@ package connection
 
 import (
 	"context"
-	"fmt"
 	"log"
 
 	"github.com/libp2p/go-libp2p/core/event"
@@ -10,17 +9,17 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 )
 
-type Controller struct {
+type Provider struct {
 	host        host.Host
 	frame       []byte
 	frameBuffer [][]byte
 }
 
-func NewController(host host.Host) *Controller {
-	return &Controller{host: host}
+func NewProvider(host host.Host) *Provider {
+	return &Provider{host: host}
 }
 
-func (c *Controller) HandleConnectedPeers() {
+func (c *Provider) HandleConnectedPeers() {
 	subscription, err := c.host.EventBus().Subscribe(new(event.EvtPeerConnectednessChanged))
 	if err != nil {
 		log.Fatal(err)
@@ -31,15 +30,15 @@ func (c *Controller) HandleConnectedPeers() {
 			connectEvent := evt.(event.EvtPeerConnectednessChanged)
 			switch connectEvent.Connectedness {
 			case network.Connected:
-				fmt.Println("connected {}", connectEvent.Peer)
+				//fmt.Println("connected {}", connectEvent.Peer)
 			case network.NotConnected:
-				fmt.Println("disconnected {}", connectEvent.Peer)
+				//fmt.Println("disconnected {}", connectEvent.Peer)
 			}
 		}
 	}()
 }
 
-func (c *Controller) StartListening(ctx context.Context) {
+func (c *Provider) StartListening(ctx context.Context) {
 	fullAddr := GetHostAddress(c.host)
 	log.Printf("I am %s\n", fullAddr)
 	c.host.SetStreamHandler("/get-frame/1.0.0", func(stream network.Stream) {
@@ -51,6 +50,6 @@ func (c *Controller) StartListening(ctx context.Context) {
 	})
 }
 
-func (c *Controller) BroadcastFrame(frame []byte) {
+func (c *Provider) BroadcastFrame(frame []byte) {
 	c.frameBuffer = append(c.frameBuffer, frame)
 }
