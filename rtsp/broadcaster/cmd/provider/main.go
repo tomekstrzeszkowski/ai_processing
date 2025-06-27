@@ -74,7 +74,7 @@ func main() {
 			Provider.BroadcastFrame(frame)
 		}
 	}()
-	peerChan := connection.InitMDNS(host, "tstrz-voting-p2p-app-v1.0.0")
+	peerChan := connection.InitMDNS(host, rendezvous)
 
 	for {
 		peer := <-peerChan // will block until we discover a peer
