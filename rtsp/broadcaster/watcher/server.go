@@ -46,6 +46,28 @@ func (s *Server) BroadcastFrame(frameData []byte) {
 		}
 	}
 }
+func (s *Server) BroadcastFramesAdaptative(frames [][]byte) {
+	frameCount := len(frames)
+
+	// Adaptive interval: faster for fewer frames, slower for many frames
+	var interval time.Duration
+	if frameCount <= 5 {
+		interval = 200 * time.Millisecond // 5 FPS for few frames
+	} else if frameCount <= 15 {
+		interval = 100 * time.Millisecond // 10 FPS for medium
+	} else {
+		interval = 50 * time.Millisecond // 20 FPS for many frames
+	}
+
+	go func(frames [][]byte, delay time.Duration) {
+		for i, frame := range frames {
+			if i > 0 {
+				time.Sleep(delay)
+			}
+			s.BroadcastFrame(frame)
+		}
+	}(frames, interval)
+}
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {

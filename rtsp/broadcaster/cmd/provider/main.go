@@ -2,13 +2,9 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
-	"time"
 
-	"github.com/ipfs/go-cid"
 	golog "github.com/ipfs/go-log/v2"
-	"github.com/multiformats/go-multihash"
 	"strzcam.com/broadcaster/connection"
 	"strzcam.com/broadcaster/watcher"
 )
@@ -33,42 +29,8 @@ func main() {
 	Provider := connection.NewProvider(host)
 	Provider.StartListening(ctx)
 	Provider.HandleConnectedPeers()
-	// ADD THIS: Announce on DHT for browser clients to find us
-	go func() {
-		// Create a proper CID from the rendezvous string
-		hash := sha256.Sum256([]byte(rendezvous))
-		mh, _ := multihash.EncodeName(hash[:], "sha2-256")
-		rendezvousBytes := cid.NewCidV1(cid.Raw, mh)
-		// Wait for DHT to be ready
-		time.Sleep(5 * time.Second)
-		fmt.Printf("Announcing on DHT with rendezvous: %s\n", rendezvous)
+	connection.AnnounceDHT(ctx, kademliaDHT, rendezvous)
 
-		// Announce ourselves as a provider for this rendezvous
-		err := kademliaDHT.Provide(ctx, rendezvousBytes, true)
-		if err != nil {
-			fmt.Printf("Failed to announce on DHT: %v\n", err)
-		} else {
-			fmt.Println("Successfully announced on DHT!")
-		}
-
-		// Keep announcing periodically
-		ticker := time.NewTicker(10 * time.Minute)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				err := kademliaDHT.Provide(ctx, rendezvousBytes, true)
-				if err != nil {
-					fmt.Printf("Failed to re-announce on DHT: %v\n", err)
-				} else {
-					fmt.Println("Re-announced on DHT")
-				}
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
 	go func() {
 		for frame := range memory.Frames {
 			Provider.BroadcastFrame(frame)
@@ -78,6 +40,11 @@ func main() {
 
 	for {
 		peer := <-peerChan // will block until we discover a peer
+		if peer.ID == host.ID() {
+			// if other end peer id greater than us, don't connect to it, just wait for it to connect us
+			fmt.Println("Found peer:", peer, " id is greater than us, wait for it to connect to us")
+			continue
+		}
 		fmt.Println("Found peer:", peer, ", connecting")
 		<-ctx.Done()
 	}

@@ -24,15 +24,17 @@
     "@chainsafe/libp2p-yamux": "^6.0.2",
     "@libp2p/bootstrap": "^10.1.2",
     "@libp2p/circuit-relay-v2": "^1.1.2",
+    "@libp2p/dcutr": "^2.0.36",
     "@libp2p/identify": "^2.1.2",
     "@libp2p/kad-dht": "^12.1.0",
     "@libp2p/mplex": "^11.0.43",
     "@libp2p/ping": "^1.1.2",
-    "@libp2p/websockets": "^8.1.0",
+    "@libp2p/websockets": "^8.2.0",
     "@multiformats/multiaddr": "^12.2.0",
     "libp2p": "^1.8.1",
     "multiformats": "^13.3.7",
-    "uint8arrays": "^5.1.0"
+    "uint8arrays": "^5.1.0",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "buffer": "^6.0.3",

@@ -12,6 +12,7 @@ import (
 )
 
 func main() {
+	rendezvous := "tstrz-b-p2p-app-v1.0.0"
 	server, _ := watcher.NewServer()
 	server.PrepareEndpoints()
 	go server.Start(":8080")
@@ -25,10 +26,14 @@ func main() {
 	defer host.Close()
 	defer kademliaDHT.Close()
 
-	peerChan := connection.InitMDNS(host, "tstrz-b-p2p-app-v1.0.0")
-
+	peerChan := connection.InitMDNS(host, rendezvous)
 	for {
 		peer := <-peerChan
+		if peer.ID == host.ID() {
+			// if other end peer id greater than us, don't connect to it, just wait for it to connect us
+			fmt.Println("Found peer:", peer, " id is greater than us, wait for it to connect to us")
+			continue
+		}
 		fmt.Println("Found peer:", peer, ", connecting")
 		viewer, _ := connection.CreateAndConnectNewViewer(ctx, &host, peer)
 		if viewer == nil {
@@ -46,24 +51,7 @@ func main() {
 				frameCount := len(frames)
 				if frameCount > 0 {
 					log.Printf("Broadcasting frames: %d\n", frameCount)
-					// Adaptive interval: faster for fewer frames, slower for many frames
-					var interval time.Duration
-					if frameCount <= 5 {
-						interval = 200 * time.Millisecond // 5 FPS for few frames
-					} else if frameCount <= 15 {
-						interval = 100 * time.Millisecond // 10 FPS for medium
-					} else {
-						interval = 50 * time.Millisecond // 20 FPS for many frames
-					}
-
-					go func(frames [][]byte, delay time.Duration) {
-						for i, frame := range frames {
-							if i > 0 {
-								time.Sleep(delay)
-							}
-							server.BroadcastFrame(frame)
-						}
-					}(frames, interval)
+					server.BroadcastFramesAdaptative(frames)
 				}
 			}
 		}

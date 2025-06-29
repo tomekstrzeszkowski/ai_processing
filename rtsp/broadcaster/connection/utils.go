@@ -3,20 +3,27 @@ package connection
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"fmt"
 	"io"
+	"time"
 
 	mrand "math/rand"
 
+	"github.com/ipfs/go-cid"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
+	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
+	tls "github.com/libp2p/go-libp2p/p2p/security/tls"
+	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/libp2p/go-libp2p/p2p/transport/websocket"
 	"github.com/multiformats/go-multiaddr"
 	ma "github.com/multiformats/go-multiaddr"
+	"github.com/multiformats/go-multihash"
 )
 
 func GetHostAddress(ha host.Host) string {
@@ -91,13 +98,16 @@ func MakeEnhancedHost(ctx context.Context, listenPort int, insecure bool, randse
 			fmt.Sprintf("/ip4/0.0.0.0/tcp/%d/ws", listenPort), //
 			fmt.Sprintf("/ip6/::/tcp/%d/ws", listenPort),      //
 		),
+		libp2p.Transport(websocket.New),
+		libp2p.Transport(tcp.NewTCPTransport),
 		libp2p.Identity(prv),
 		libp2p.EnableRelay(),        // Enable circuit relay
 		libp2p.EnableHolePunching(), // Enable NAT hole punching
 		libp2p.EnableNATService(),   // Enable NAT port mapping
 		// libp2p.ForceReachabilityPrivate(), // Assume we're behind NAT, DHT conflict
-		libp2p.Transport(websocket.New),
 		getOptionEnableAutoRelayWithPeerSource(bootstrapPeers),
+		libp2p.Muxer("/yamux/1.0.0", yamux.DefaultTransport),
+		libp2p.Security(tls.ID, tls.New),
 	}
 
 	if insecure {
@@ -162,4 +172,41 @@ func MakeBasicHost(listenPort int, insecure bool, randseed int64) (host.Host, er
 		opts = append(opts, libp2p.NoSecurity)
 	}
 	return libp2p.New(opts...)
+}
+
+func AnnounceDHT(ctx context.Context, kademliaDHT *dht.IpfsDHT, rendezvous string) {
+	// Create a proper CID from the rendezvous string
+	hash := sha256.Sum256([]byte(rendezvous))
+	mh, _ := multihash.EncodeName(hash[:], "sha2-256")
+	rendezvousBytes := cid.NewCidV1(cid.Raw, mh)
+	// Wait for DHT to be ready
+	time.Sleep(5 * time.Second)
+	fmt.Printf("Announcing on DHT with rendezvous: %s\n", rendezvous)
+
+	// Announce ourselves as a provider for this rendezvous
+	err := kademliaDHT.Provide(ctx, rendezvousBytes, true)
+	if err != nil {
+		fmt.Printf("Failed to announce on DHT: %v\n", err)
+	} else {
+		fmt.Println("Successfully announced on DHT!")
+	}
+
+	// Keep announcing periodically
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				err := kademliaDHT.Provide(ctx, rendezvousBytes, true)
+				if err != nil {
+					fmt.Printf("Failed to re-announce on DHT: %v\n", err)
+				} else {
+					fmt.Println("Re-announced on DHT")
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 }
