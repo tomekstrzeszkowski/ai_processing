@@ -25,7 +25,7 @@ func main() {
 	defer host.Close()
 	defer kademliaDHT.Close()
 
-	peerChan := connection.InitMDNS(host, "tstrz-voting-p2p-app-v1.0.0")
+	peerChan := connection.InitMDNS(host, "tstrz-b-p2p-app-v1.0.0")
 
 	for {
 		peer := <-peerChan

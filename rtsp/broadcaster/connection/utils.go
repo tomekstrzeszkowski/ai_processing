@@ -14,6 +14,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
+	"github.com/libp2p/go-libp2p/p2p/transport/websocket"
 	"github.com/multiformats/go-multiaddr"
 	ma "github.com/multiformats/go-multiaddr"
 )
@@ -85,14 +86,17 @@ func MakeEnhancedHost(ctx context.Context, listenPort int, insecure bool, randse
 	bootstrapPeers := createDHTForPeerDiscovery()
 	opts := []libp2p.Option{
 		libp2p.ListenAddrStrings(
-			fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", listenPort), // all interfaces
-			fmt.Sprintf("/ip6/::/tcp/%d", listenPort),      // IPv6 support
+			fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", listenPort),    // all interfaces
+			fmt.Sprintf("/ip6/::/tcp/%d", listenPort),         // IPv6 support
+			fmt.Sprintf("/ip4/0.0.0.0/tcp/%d/ws", listenPort), //
+			fmt.Sprintf("/ip6/::/tcp/%d/ws", listenPort),      //
 		),
 		libp2p.Identity(prv),
-		libp2p.EnableRelay(),              // Enable circuit relay
-		libp2p.EnableHolePunching(),       // Enable NAT hole punching
-		libp2p.EnableNATService(),         // Enable NAT port mapping
-		libp2p.ForceReachabilityPrivate(), // Assume we're behind NAT
+		libp2p.EnableRelay(),        // Enable circuit relay
+		libp2p.EnableHolePunching(), // Enable NAT hole punching
+		libp2p.EnableNATService(),   // Enable NAT port mapping
+		// libp2p.ForceReachabilityPrivate(), // Assume we're behind NAT, DHT conflict
+		libp2p.Transport(websocket.New),
 		getOptionEnableAutoRelayWithPeerSource(bootstrapPeers),
 	}
 
