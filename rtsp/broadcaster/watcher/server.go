@@ -99,6 +99,12 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
+	// Handle preflight requests
+	if r.Method == "OPTIONS" {
+		s.setCORSHeaders(w)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	s.clientsMux.RLock()
 	clientCount := len(s.clients)
 	s.clientsMux.RUnlock()
@@ -111,6 +117,13 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(status)
+}
+
+// Add CORS headers to response
+func (s *Server) setCORSHeaders(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 }
 
 func (s *Server) PrepareEndpoints() {

@@ -1,126 +1,50 @@
-# Go connection issue
+# Welcome to your Expo app 👋
 
-WIP
+This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
-# P2P Video Client
+## Get started
 
-A JavaScript-based peer-to-peer video streaming client ported from Go, designed for mobile deployment using Capacitor.
+1. Install dependencies
 
-## Features
+   ```bash
+   npm install
+   ```
 
-- 🔗 **P2P Connectivity**: Direct peer-to-peer connections using js-libp2p (same as Go version)
-- 📱 **Mobile Ready**: Optimized for mobile devices with Capacitor
-- 🎥 **Video Streaming**: Real-time JPEG frame sharing between peers
-- 🔍 **Peer Discovery**: Automatic mDNS peer discovery (same protocol as Go version)
-- 📺 **Screen Sharing**: Share your screen with connected peers
-- 🎨 **Modern UI**: Beautiful, responsive interface with dark mode support
+2. Start the app
 
-## Architecture
+   ```bash
+   npx expo start
+   ```
 
-This client is a direct port of the Go libp2p implementation:
-- **js-libp2p** for P2P connections (equivalent to Go's libp2p)
-- **mDNS** for peer discovery (same as Go version)
-- **Custom protocol** `/get-frame/1.0.0` for frame streaming
-- **Canvas API** for JPEG frame processing
-- **Capacitor** for mobile deployment
+In the output, you'll find options to open the app in a
 
-The JavaScript version maintains the same P2P architecture as the Go version:
-- Uses the same bootstrap peers for DHT
-- Same mDNS service tag: `tstrz-b-p2p-app-v1.0.0`
-- Same protocol ID: `/get-frame/1.0.0`
-- Same frame buffering and broadcasting logic
+- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
+- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
+- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
+- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
 
-## Quick Start
+You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
-### Web Development
+## Get a fresh project
+
+When you're ready, run:
 
 ```bash
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-
-# Build for production
-npm run build
+npm run reset-project
 ```
 
-### Mobile Deployment
+This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
 
-```bash
-# Initialize Capacitor
-npm run mobile:init
+## Learn more
 
-# Add mobile platforms
-npm run mobile:add-ios     # For iOS
-npm run mobile:add-android # For Android
+To learn more about developing your project with Expo, look at the following resources:
 
-# Build and sync
-npm run mobile:build
+- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
+- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
 
-# Open in native IDEs
-npm run mobile:open-ios     # Opens Xcode
-npm run mobile:open-android # Opens Android Studio
-```
+## Join the community
 
-## Usage
+Join our community of developers creating universal apps.
 
-1. **Start P2P Discovery**: Click "Start P2P Discovery" to begin looking for peers
-2. **Share Screen**: Click "Share Screen" to broadcast your screen to connected peers
-3. **View Connections**: Monitor connected peers in the peer list
-4. **View Logs**: Check the logs section for connection status and debugging info
-
-## Peer Discovery
-
-Currently uses mDNS for peer discovery.
-
-## Mobile Considerations
-
-### iOS
-- Requires camera/microphone permissions in Info.plist
-- WebRTC works well in WKWebView (Capacitor's default)
-- Background processing limitations apply
-
-### Android
-- Requires CAMERA and RECORD_AUDIO permissions
-- WebRTC supported in modern WebView versions
-- Consider battery optimization settings
-
-## Production Deployment
-
-For production use, you'll need to:
-
-1. **Set up a signaling server** (replace localStorage discovery)
-2. **Configure STUN/TURN servers** for NAT traversal
-3. **Implement proper authentication** and security measures
-4. **Add error handling** and reconnection logic
-5. **Optimize for mobile networks** (adaptive bitrate, etc.)
-
-## Comparison with Go Version
-
-| Feature | Go Version | JavaScript Version |
-|---------|------------|-------------------|
-| P2P Library | libp2p | js-libp2p |
-| Peer Discovery | mDNS | mDNS |
-| Video Processing | Go routines | Canvas API |
-| Mobile Support | None | Capacitor |
-| WebSocket Server | Built-in | Not needed |
-
-## Development Notes
-
-- The current peer discovery uses mDNS for simplicity
-- In production, implement a proper signaling server
-- Frame processing is done client-side using Canvas API
-- Mobile permissions are handled by Capacitor plugins
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test on both web and mobile
-5. Submit a pull request
-
-## License
-
-MIT License - see LICENSE file for details
+- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
+- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
