@@ -10,8 +10,6 @@ import (
 )
 
 func main() {
-
-	rendezvous := "tstrz-b-p2p-app-v1.0.0"
 	// Create a key from the rendezvous string
 	memory, _ := watcher.NewSharedMemoryReceiver("video_frame")
 	defer memory.Close()
@@ -29,14 +27,14 @@ func main() {
 	Provider := connection.NewProvider(host)
 	Provider.StartListening(ctx)
 	Provider.HandleConnectedPeers()
-	connection.AnnounceDHT(ctx, kademliaDHT, rendezvous)
+	connection.AnnounceDHT(ctx, kademliaDHT, connection.RendezVous)
 
 	go func() {
 		for frame := range memory.Frames {
 			Provider.BroadcastFrame(frame)
 		}
 	}()
-	peerChan := connection.InitMDNS(host, rendezvous)
+	peerChan := connection.InitMDNS(host, connection.RendezVous)
 
 	for {
 		peer := <-peerChan // will block until we discover a peer

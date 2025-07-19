@@ -4,3 +4,4 @@ venv/*
 *.py[c|o]
 *_processed.mp4
 .env
+__pycache__/*

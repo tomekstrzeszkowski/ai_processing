@@ -12,7 +12,6 @@ import (
 )
 
 func main() {
-	rendezvous := "tstrz-b-p2p-app-v1.0.0"
 	server, _ := watcher.NewServer()
 	server.PrepareEndpoints()
 	go server.Start(":8080")
@@ -26,7 +25,7 @@ func main() {
 	defer host.Close()
 	defer kademliaDHT.Close()
 
-	peerChan := connection.InitMDNS(host, rendezvous)
+	peerChan := connection.InitMDNS(host, connection.RendezVous)
 	for {
 		peer := <-peerChan
 		if peer.ID == host.ID() {

@@ -20,12 +20,13 @@ def make_ellipse_mask(size, box, ellipse_blur=10):
 
 
 if __name__ == "__main__":
+    BLUR_FACES = False
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     # face detector
     mtcnn = MTCNN(keep_all=True, device=device)
     # human detecter
     detector = Detector()
-    font = ImageFont.truetype("arial.ttf", 36)
+    font = ImageFont.load_default()
     frames_tracked = []
     video = cv2.VideoCapture(file_name)
     length = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -74,16 +75,16 @@ if __name__ == "__main__":
         frame_draw = Image.fromarray(frame_array)
 
         # detect faces
-        # faces, _ = mtcnn.detect(frame_array)
-        # if faces is None:
-        #     continue
-        # draw.text((20, 50), f"Faces: {len(faces)}", color="white", font=font)
-
-        # blurred = frame_draw.filter(ImageFilter.GaussianBlur(40))
-        # for face in faces:
-        #     mask_box = make_ellipse_mask(frame_draw.size, face)
-        #     frame_draw.paste(blurred, mask=mask_box)
-        #     draw.rectangle(face.tolist(), outline="red")
+        if BLUR_FACES:
+            faces, _ = mtcnn.detect(frame_array)
+            if faces is None:
+                continue
+            draw.text((20, 50), f"Faces: {len(faces)}", fill="white", font=font)
+            blurred = frame_draw.filter(ImageFilter.GaussianBlur(40))
+            for face in faces:
+                mask_box = make_ellipse_mask(frame_draw.size, face)
+                frame_draw.paste(blurred, mask=mask_box)
+                draw.rectangle(face.tolist(), outline="red")
         frame_bgr = cv2.cvtColor(np.array(frame_draw), cv2.COLOR_RGB2BGR)
         success, buffer = cv2.imencode('.jpg', frame_bgr)
         if success:
