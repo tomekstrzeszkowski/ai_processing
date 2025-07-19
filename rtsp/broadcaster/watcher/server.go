@@ -100,11 +100,9 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	// Handle preflight requests
-	if r.Method == "OPTIONS" {
-		s.setCORSHeaders(w)
-		w.WriteHeader(http.StatusOK)
-		return
-	}
+	s.setCORSHeaders(w)
+	w.WriteHeader(http.StatusOK)
+
 	s.clientsMux.RLock()
 	clientCount := len(s.clients)
 	s.clientsMux.RUnlock()

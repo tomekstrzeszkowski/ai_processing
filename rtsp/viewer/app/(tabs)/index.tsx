@@ -156,16 +156,6 @@ const App = () => {
           )}
         </View>
         <StatusBar style="light" backgroundColor="#1a1a1a" />
-        
-        <View style={styles.header}>
-          <Text style={styles.title}>Live Video Stream</Text>
-          <View style={styles.statusContainer}>
-            <View style={[styles.statusDot, { backgroundColor: isConnected ? '#4CAF50' : '#f44336' }]} />
-            <Text style={styles.statusText}>
-              {isConnected ? 'Connected' : isConnecting ? 'Connecting...' : 'Disconnected'}
-            </Text>
-          </View>
-        </View>
 
         <View style={styles.connectionContainer}>
           <TouchableOpacity
