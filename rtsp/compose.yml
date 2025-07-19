@@ -1,0 +1,34 @@
+services:
+  provider:
+    build: 
+      context: ./broadcaster/
+      dockerfile: ./docker/DockerfileProvider
+    ports:
+      - 2345:2345
+    volumes:
+      - shared_memory:/dev/shm
+    shm_size: 256m
+    tmpfs:
+      - /shared:size=256m
+
+  viewer:
+    build: 
+      context: ./broadcaster/
+      dockerfile: ./docker/DockerfileViewer
+    ports:
+      - 8080:8080
+      - 2346:2346
+
+  camera:
+    build: 
+      context: ./camera/
+      dockerfile: ./Dockerfile
+    volumes:
+      - shared_memory:/dev/shm
+    shm_size: 256m
+    tmpfs:
+      - /shared:size=256m
+    command: "python detect.py"
+
+volumes:
+  shared_memory:
