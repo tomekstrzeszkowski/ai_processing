@@ -14,6 +14,4 @@ RUN pip install --upgrade pip \
 
 COPY . .
 
-RUN rm -rf venv __pycache__
-
 CMD ["python"]
