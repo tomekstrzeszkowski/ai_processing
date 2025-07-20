@@ -1,0 +1,22 @@
+FROM golang:1.23 AS builder
+WORKDIR /app/
+
+#dlv
+RUN go install github.com/go-delve/delve/cmd/dlv@latest
+
+COPY . .
+
+RUN go mod download
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -gcflags="-N -l" -a -o ./bin/watcher ./cmd/watcher/main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -gcflags="-N -l" -a -o ./bin/server ./cmd/server/main.go
+
+
+FROM debian:bookworm-slim
+WORKDIR /app/
+COPY --from=builder /app/bin/watcher ./bin/watcher
+COPY --from=builder /app/bin/server ./bin/server
+COPY --from=builder /go/bin/dlv /
+
+EXPOSE 8071 8072 2345
+
+CMD []

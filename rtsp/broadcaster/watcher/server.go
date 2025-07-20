@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"sync"
 	"time"
+	"fmt"
 
 	"github.com/gorilla/websocket"
 )
@@ -14,14 +15,16 @@ type Server struct {
 	clients    map[*websocket.Conn]bool
 	clientsMux sync.RWMutex
 	upgrader   websocket.Upgrader
+	port uint16
 }
 
-func NewServer() (*Server, error) {
+func NewServer(port uint16) (*Server, error) {
 	receiver := &Server{
 		clients: make(map[*websocket.Conn]bool),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
+		port: port,
 	}
 	return receiver, nil
 }
@@ -138,12 +141,12 @@ func (s *Server) PrepareEndpoints() {
     <title>Video Stream</title>
 </head>
 <body>
-    <h1>Live Video Stream</h1>
+    <h1>Live Video Stream` + fmt.Sprintf("%d", s.port) + `</h1>
     <img id="video" style="max-width: 100%;" />
     <div id="status"></div>
     
     <script>
-        const ws = new WebSocket('ws://localhost:8080/ws');
+        const ws = new WebSocket('ws://localhost:` + fmt.Sprintf("%d", s.port) + `/ws');
         const videoImg = document.getElementById('video');
         const statusDiv = document.getElementById('status');
         
@@ -182,6 +185,6 @@ func (s *Server) PrepareEndpoints() {
 		w.Write([]byte(html))
 	})
 }
-func (s *Server) Start(addr string) {
-	http.ListenAndServe(addr, nil)
+func (s *Server) Start() {
+	http.ListenAndServe(fmt.Sprintf(":%d", s.port), nil)
 }

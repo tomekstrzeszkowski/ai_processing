@@ -6,7 +6,7 @@ func main() {
 	memory, _ := watcher.NewSharedMemoryReceiver("video_frame")
 	defer memory.Close()
 	go memory.WatchSharedMemory()
-	server, _ := watcher.NewServer()
+	server, _ := watcher.NewServer(8071)
 
 	server.PrepareEndpoints()
 	go func() {
@@ -14,5 +14,5 @@ func main() {
 			server.BroadcastFrame(frame)
 		}
 	}()
-	server.Start(":8080")
+	server.Start()
 }

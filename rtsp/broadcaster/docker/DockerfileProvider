@@ -15,6 +15,6 @@ WORKDIR /app/
 COPY --from=builder /app/bin/provider ./bin/provider
 COPY --from=builder /go/bin/dlv /
 
-EXPOSE 8080 2345
+EXPOSE 2345
 
 CMD ["./bin/provider"]

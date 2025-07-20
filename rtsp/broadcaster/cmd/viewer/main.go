@@ -12,9 +12,9 @@ import (
 )
 
 func main() {
-	server, _ := watcher.NewServer()
+	server, _ := watcher.NewServer(8080)
 	server.PrepareEndpoints()
-	go server.Start(":8080")
+	go server.Start()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

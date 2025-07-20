@@ -17,7 +17,7 @@ services:
       dockerfile: ./docker/DockerfileViewer
     ports:
       - 8080:8080
-      - 2346:2346
+      - 2346:2345
 
   camera:
     build: 
@@ -37,5 +37,24 @@ services:
     ports:
       - 8081:8081
 
+  server:
+    build: 
+      context: ./broadcaster/
+      dockerfile: ./docker/DockerfileMisc
+    command: "./bin/server"
+    ports:
+      - 8071:8071
+      - 2334:2345
+    profiles: [debug]
+
+  watcher:
+    build: 
+      context: ./broadcaster/
+      dockerfile: ./docker/DockerfileMisc
+    command: "./bin/watcher"
+    ports:
+      - 8072:8072
+      - 2335:2345
+    profiles: [debug]
 volumes:
   shared_memory:

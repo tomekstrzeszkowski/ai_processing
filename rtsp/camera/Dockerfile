@@ -7,11 +7,14 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
+# avoid coping it each time docker is re-builded
+COPY *.onnx .
+COPY *.mp4 .
 COPY requirements.txt .
 
 RUN pip install --upgrade pip \
     && pip install -r requirements.txt
 
-COPY . .
+COPY *.py .
 
 CMD ["python"]
