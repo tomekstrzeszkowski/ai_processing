@@ -2,25 +2,30 @@ package watcher
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
 	"time"
-	"fmt"
 
 	"github.com/gorilla/websocket"
 )
 
+type connInfo struct {
+	conn     *websocket.Conn
+	writeMux sync.Mutex
+}
+
 type Server struct {
-	clients    map[*websocket.Conn]bool
+	clients    map[*connInfo]bool
 	clientsMux sync.RWMutex
 	upgrader   websocket.Upgrader
-	port uint16
+	port       uint16
 }
 
 func NewServer(port uint16) (*Server, error) {
 	receiver := &Server{
-		clients: make(map[*websocket.Conn]bool),
+		clients: make(map[*connInfo]bool),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
@@ -40,12 +45,16 @@ func (s *Server) BroadcastFrame(frameData []byte) {
 	}
 
 	// Send to all connected WebSocket clients
-	for client := range s.clients {
-		err := client.WriteJSON(message)
+	for clientInfo := range s.clients {
+		// Lock the write mutex for this specific connection
+		clientInfo.writeMux.Lock()
+		err := clientInfo.conn.WriteJSON(message)
+		clientInfo.writeMux.Unlock()
+
 		if err != nil {
 			log.Printf("Error sending frame to client: %v", err)
-			client.Close()
-			delete(s.clients, client)
+			clientInfo.conn.Close()
+			delete(s.clients, clientInfo)
 		}
 	}
 }
@@ -78,28 +87,30 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	clientInfo := &connInfo{
+		conn: conn,
+	}
+
+	// Register new client
 	s.clientsMux.Lock()
-	s.clients[conn] = true
+	s.clients[clientInfo] = true
 	s.clientsMux.Unlock()
 
 	log.Printf("New WebSocket client connected. Total clients: %d", len(s.clients))
 
-	// Handle client disconnection
-	defer func() {
-		s.clientsMux.Lock()
-		delete(s.clients, conn)
-		s.clientsMux.Unlock()
-		conn.Close()
-		log.Printf("WebSocket client disconnected. Total clients: %d", len(s.clients))
-	}()
-
-	// Keep connection alive and handle ping/pong
-	for {
-		_, _, err := conn.ReadMessage()
-		if err != nil {
-			break
+	// Handle client disconnect
+	go func() {
+		for {
+			// Read message (we don't process it, just detect disconnection)
+			if _, _, err := conn.ReadMessage(); err != nil {
+				s.clientsMux.Lock()
+				delete(s.clients, clientInfo)
+				s.clientsMux.Unlock()
+				conn.Close()
+				break
+			}
 		}
-	}
+	}()
 }
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	// Handle preflight requests

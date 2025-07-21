@@ -16,6 +16,7 @@ def process_frame(frame, detector):
         processed_frame, (int(width * 0.99), int(height * 0.99))
     )
     detected_objects = 0
+    type_ = -1
     for x0, y0, w, h, type_, scale in detector.detect_yolo_with_nms(scaled_frame):
         cv2.rectangle(processed_frame, (x0, y0), (x0 + w, y0 + h), (0, 255, 0), 1)
         cv2.putText(
@@ -39,7 +40,7 @@ def process_frame(frame, detector):
             2,
         )
     
-    return processed_frame
+    return processed_frame, type_
 
 def main():
     url = os.getenv("IP_CAM_URL", "copy .env.template")
@@ -95,14 +96,16 @@ def main():
             if frame_count % (skip_frames + 1) != 0:
                 continue
             small_frame = cv2.resize(frame, (target_width, target_height))
-            processed_frame = process_frame(small_frame, detector)
+            processed_frame, type_ = process_frame(small_frame, detector)
             
             # Display frames
             cv2.imshow('Processed', processed_frame)
             processed_frame_bgr = cv2.cvtColor(np.array(processed_frame), cv2.COLOR_RGB2BGR)
             success, buffer = cv2.imencode('.jpg', processed_frame_bgr)
             if success:
-                write_frame_to_shared_memory(buffer)
+                write_frame_to_shared_memory(
+                    buffer, type_, shm_name=f"video_frame"
+                )
             elapsed_time = time.time() - start_time
             if elapsed_time > 1.0:  # Update every second
                 actual_fps = frame_count / elapsed_time

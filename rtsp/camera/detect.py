@@ -51,6 +51,7 @@ if __name__ == "__main__":
         draw = ImageDraw.Draw(frame_draw)
         # detect humans
         detected = 0
+        type_ = -1
         for x0, y0, w, h, type_, scale in detector.detect_yolo_with_largest_box(frame_array):
             detected += 1
             cv2.rectangle(frame_array, (x0, y0), (x0 + w, y0 + h), (0, 0, 255), 2)
@@ -88,7 +89,9 @@ if __name__ == "__main__":
         frame_bgr = cv2.cvtColor(np.array(frame_draw), cv2.COLOR_RGB2BGR)
         success, buffer = cv2.imencode('.jpg', frame_bgr)
         if success:
-            write_frame_to_shared_memory(buffer)
+            write_frame_to_shared_memory(
+                buffer, type_, shm_name=f"video_frame"
+            )
         frames_tracked.append(frame_draw.resize((width, height), Image.BILINEAR))
 
 
