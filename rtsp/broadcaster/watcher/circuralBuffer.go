@@ -53,6 +53,9 @@ func (cb *CircularBuffer) GetAll() [][]byte {
 func (cb *CircularBuffer) Size() int {
 	return cb.size
 }
+func (cb *CircularBuffer) IsFull() bool {
+	return cb.size == cb.capacity-1
+}
 func (cb *CircularBuffer) Clear() {
 	// Reset all slice elements to nil to help GC
 	for i := range cb.data {
