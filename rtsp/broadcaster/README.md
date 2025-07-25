@@ -36,3 +36,9 @@ Serve frames by swapping image source.
 ```
 go build -o ./bin/server ./cmd/server/main.go
 ```
+
+# Testing
+
+```
+go test ./...
+```

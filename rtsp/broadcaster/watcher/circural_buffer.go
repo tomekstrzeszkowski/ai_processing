@@ -54,7 +54,7 @@ func (cb *CircularBuffer) Size() int {
 	return cb.size
 }
 func (cb *CircularBuffer) IsFull() bool {
-	return cb.size == cb.capacity-1
+	return cb.size == cb.capacity
 }
 func (cb *CircularBuffer) Clear() {
 	// Reset all slice elements to nil to help GC
