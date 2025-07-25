@@ -140,37 +140,31 @@ func (smr *SharedMemoryReceiver) Close() {
 		smr.watcher.Close()
 	}
 }
-func (smr *SharedMemoryReceiver) SaveFrame(i int, b []byte) {
-	f, err := os.Create(fmt.Sprintf("./saved/frame%d.jpg", i))
-	if err != nil {
-		panic(fmt.Sprintf("Cant create file: %v", err))
-	}
-	defer f.Close()
-	f.Write(b)
-}
 func (smr *SharedMemoryReceiver) SaveFrameForLater() {
-	i := 0 // TODO: check last frame index + 1
 	for detectedFrame := range smr.SignificantFrames {
+		year, month, day := time.Now().Date()
+		path := fmt.Sprintf("./saved/%d-%02d-%02d", year, month, day)
+		i, path := TouchDirAndGetIterator(path, 10*1024*1024) // 10MB limit
 		if detectedFrame.Data != nil {
 			if detectedFrame.After != nil && detectedFrame.After.Size() > 0 {
 				for _, frameAfter := range detectedFrame.After.GetAll() {
-					smr.SaveFrame(i, frameAfter)
+					SaveFrame(i, frameAfter, path)
 					i += 1
 				}
 				//after will be created again after this method
 				log.Printf("Frames before from previous detection: %d", detectedFrame.After.Size())
 			} else {
 				for _, frameBefore := range detectedFrame.Before.GetAll() {
-					smr.SaveFrame(i, frameBefore)
+					SaveFrame(i, frameBefore, path)
 					i += 1
 				}
 			}
-			smr.SaveFrame(i, *detectedFrame.Data)
+			SaveFrame(i, *detectedFrame.Data, path)
 			i += 1
 			detectedFrame.Before.Clear()
 		} else {
 			for _, frameAfter := range detectedFrame.After.GetAll() {
-				smr.SaveFrame(i, frameAfter)
+				SaveFrame(i, frameAfter, path)
 				i += 1
 			}
 		}
