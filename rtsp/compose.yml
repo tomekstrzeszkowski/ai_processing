@@ -7,6 +7,7 @@ services:
       - 2345:2345
     volumes:
       - shared_memory:/dev/shm
+      - ./broadcaster/saved:/app/saved
     shm_size: 256m
     tmpfs:
       - /shared:size=256m
