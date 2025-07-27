@@ -5,6 +5,10 @@ Send frames via p2p. Frames are pulled from watcher.
 ```
 go build -o ./bin/provider ./cmd/provider/main.go
 ```
+or
+```
+go run ./cmd/provider/main.go
+```
 
 # Viewer
 
@@ -35,6 +39,13 @@ Serve frames by swapping image source.
 
 ```
 go build -o ./bin/server ./cmd/server/main.go
+```
+## Converter
+
+Convert frames to video files.
+
+```
+go build -o ./bin/converter ./cmd/converter/main.go
 ```
 
 # Testing

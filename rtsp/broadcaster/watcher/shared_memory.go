@@ -12,10 +12,6 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-var possibleDetections = []int{0, 1, 2, 3, 4}
-
-const savePath = "./saved"
-
 type SignificantFrame struct {
 	Data     *[]byte
 	Detected int
@@ -31,7 +27,7 @@ type SharedMemoryReceiver struct {
 }
 
 func NewSharedMemoryReceiver(shmName string) (*SharedMemoryReceiver, error) {
-	if err := os.MkdirAll(savePath, 0755); err != nil {
+	if err := os.MkdirAll(SavePath, 0755); err != nil {
 		panic(fmt.Sprintf("Cannot create directory: %v", err))
 	}
 	watcher, err := fsnotify.NewWatcher()
@@ -145,8 +141,8 @@ func (smr *SharedMemoryReceiver) Close() {
 func (smr *SharedMemoryReceiver) SaveFrameForLater() {
 	for detectedFrame := range smr.SignificantFrames {
 		year, month, day := time.Now().Date()
-		path := fmt.Sprintf("%s/%d-%02d-%02d", savePath, year, month, day)
-		i, path := TouchDirAndGetIterator(path, 10*1024*1024) // 10MB limit
+		path := fmt.Sprintf("%s/%d-%02d-%02d", SavePath, year, month, day)
+		i, path := TouchDirAndGetIterator(path, saveChunkSize) // 1GB
 		if detectedFrame.Data != nil {
 			if detectedFrame.After != nil && detectedFrame.After.Size() > 0 {
 				for _, frameAfter := range detectedFrame.After.GetAll() {
