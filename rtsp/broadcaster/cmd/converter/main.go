@@ -17,6 +17,6 @@ func main() {
 	for {
 		watcher.RemoveOldestDirs(watcher.SavePath, skipDates)
 		watcher.RemoveOldestVideoFiles(watcher.SavePath, skipDates)
-		watcher.ConvertLastChunkToVideo(watcher.SavePath, skipDates)
+		watcher.ConvertLastChunkToVideo(watcher.SavePath)
 	}
 }

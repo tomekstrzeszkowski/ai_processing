@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 func RemoveOldestDirs(savePath string, skipDirs []string) {
@@ -52,10 +53,19 @@ func Convert(chunkPath string) error {
 	return nil
 }
 
-func ConvertLastChunkToVideo(savePath string, skipDirs []string) {
-	chunkPath := GetOldestChunkInDateDir(savePath, skipDirs)
+func ConvertLastChunkToVideo(savePath string) {
+	dirCount := CountChunksInDateDir(savePath, []string{})
+	chunkPath := GetOldestChunkInDateDir(savePath, []string{})
 	if chunkPath == "" {
 		fmt.Println("No chunk found to convert.")
+		return
+	}
+	fmt.Printf("Converting last chunk: %s\n", chunkPath)
+	parts := strings.Split(chunkPath, "/")
+	dateDir := parts[len(parts)-2]
+	now := time.Now()
+	if dirCount < 2 && dateDir == now.Format("2006-01-02") {
+		fmt.Println("There is only one chunk that can be busy.")
 		return
 	}
 	Convert(chunkPath)

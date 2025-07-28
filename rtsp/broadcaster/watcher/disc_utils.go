@@ -121,11 +121,10 @@ func GetOldestDateDirName(base_path string, skipDirs []string) (string, error) {
 	}
 	return "", nil
 }
-
-func GetOldestChunkDirName(base_path string) (string, error) {
+func GetChunkNames(base_path string, skipDirs []string) ([]string, error) {
 	dirs, err := os.ReadDir(base_path)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	var dirNames []string
 	for _, dir := range dirs {
@@ -134,13 +133,20 @@ func GetOldestChunkDirName(base_path string) (string, error) {
 		}
 	}
 	if len(dirNames) == 0 {
-		return "", nil
+		return dirNames, nil
 	}
 	sort.Slice(dirNames, func(i, j int) bool {
 		numI, _ := strconv.Atoi(dirNames[i])
 		numJ, _ := strconv.Atoi(dirNames[j])
 		return numI < numJ
 	})
+	return dirNames, nil
+}
+func GetOldestChunkDirName(base_path string, skipDirs []string) (string, error) {
+	dirNames, _ := GetChunkNames(base_path, skipDirs)
+	if len(dirNames) == 0 {
+		return "", nil
+	}
 	return dirNames[0], nil
 }
 
@@ -150,7 +156,7 @@ func GetOldestChunkInDateDir(base_path string, skipDirs []string) string {
 		return ""
 	}
 	chunkPath := fmt.Sprintf("%s/%s", base_path, lastDir)
-	lastChunk, _ := GetOldestChunkDirName(chunkPath)
+	lastChunk, _ := GetOldestChunkDirName(chunkPath, skipDirs)
 	return fmt.Sprintf("%s/%s", chunkPath, lastChunk)
 }
 func IsCloseToDirSize(path string) bool {
@@ -174,7 +180,7 @@ func RemoveChunk(path string, skipDirs []string) {
 	os.RemoveAll(pathToRemove)
 	lastDateDir, _ := GetOldestDateDirName(path, skipDirs)
 	datePath := fmt.Sprintf("%s/%s", path, lastDateDir)
-	chunkDirName, _ := GetOldestChunkDirName(datePath)
+	chunkDirName, _ := GetOldestChunkDirName(datePath, skipDirs)
 	if chunkDirName == "" {
 		os.RemoveAll(datePath)
 	}
@@ -223,4 +229,14 @@ func RemoveOldestVideo(path string, extensions []string, skipDates []string) boo
 	fmt.Printf("Deleting oldest: %s/%s\n", path, oldest)
 	os.Remove(fmt.Sprintf("%s/%s", path, oldest))
 	return true
+}
+
+func CountChunksInDateDir(base_path string, skipDirs []string) int {
+	lastDir, _ := GetOldestDateDirName(base_path, skipDirs)
+	if lastDir == "" {
+		return 0
+	}
+	chunkPath := fmt.Sprintf("%s/%s", base_path, lastDir)
+	chunks, _ := os.ReadDir(chunkPath)
+	return len(chunks)
 }
