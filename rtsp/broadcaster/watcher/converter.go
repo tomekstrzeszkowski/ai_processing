@@ -7,7 +7,75 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/fsnotify/fsnotify"
 )
+
+type Converter struct {
+	savePath string
+	watcher  *fsnotify.Watcher
+	hasJob   bool
+}
+
+func NewConverter(savePath string) (*Converter, error) {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return nil, err
+	}
+	watcher.Add(savePath)
+	return &Converter{
+		savePath: savePath,
+		watcher:  watcher,
+		hasJob:   false,
+	}, nil
+}
+func (c *Converter) Watch() {
+	for {
+		select {
+		case event, ok := <-c.watcher.Events:
+			if !ok {
+				return
+			}
+			if event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create {
+				path := strings.Split(event.Name, "/")
+				if len(path[len(path)-1]) == 10 {
+					c.watcher.Add(event.Name)
+				} else {
+					if !c.hasJob {
+						skipDates := c.GetSkipDates()
+						for {
+							RemoveOldestDirs(SavePath, skipDates)
+							RemoveOldestVideoFiles(SavePath, skipDates)
+							c.hasJob = ConvertLastChunkToVideo(SavePath)
+							if !c.hasJob {
+								break
+							}
+						}
+					}
+				}
+			}
+
+		case _, ok := <-c.watcher.Errors:
+			if !ok {
+				return
+			}
+		}
+	}
+}
+func (c *Converter) Close() {
+	if c.watcher != nil {
+		c.watcher.Close()
+	}
+}
+func (c *Converter) GetSkipDates() []string {
+	now := time.Now()
+	skipDates := []string{now.Format("2006-01-02")}
+	for i := 1; i <= ConvertFramesBeforeDays; i++ {
+		pastDate := now.AddDate(0, 0, -i) // Subtract i days
+		skipDates = append(skipDates, pastDate.Format("2006-01-02"))
+	}
+	return skipDates
+}
 
 func RemoveOldestDirs(savePath string, skipDirs []string) {
 	for RemoveOldestDir(savePath, skipDirs) {
@@ -53,12 +121,12 @@ func Convert(chunkPath string) error {
 	return nil
 }
 
-func ConvertLastChunkToVideo(savePath string) {
+func ConvertLastChunkToVideo(savePath string) bool {
 	dirCount := CountChunksInDateDir(savePath, []string{})
 	chunkPath := GetOldestChunkInDateDir(savePath, []string{})
 	if chunkPath == "" {
 		fmt.Println("No chunk found to convert.")
-		return
+		return false
 	}
 	fmt.Printf("Converting last chunk: %s\n", chunkPath)
 	parts := strings.Split(chunkPath, "/")
@@ -66,8 +134,33 @@ func ConvertLastChunkToVideo(savePath string) {
 	now := time.Now()
 	if dirCount < 2 && dateDir == now.Format("2006-01-02") {
 		fmt.Println("There is only one chunk that can be busy.")
-		return
+		return false
 	}
 	Convert(chunkPath)
 	os.RemoveAll(chunkPath)
+	return true
+}
+
+func StartWorkflow() {
+	converter, _ := NewConverter(SavePath)
+	defer converter.Close()
+	go func() {
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			if !converter.hasJob {
+				skipDates := converter.GetSkipDates()
+				for {
+					RemoveOldestDirs(SavePath, skipDates)
+					RemoveOldestVideoFiles(SavePath, skipDates)
+					converter.hasJob = ConvertLastChunkToVideo(SavePath)
+					if !converter.hasJob {
+						break
+					}
+				}
+			}
+		}
+	}()
+
+	converter.Watch()
 }

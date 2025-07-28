@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -86,7 +85,7 @@ func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 			}
 
 			// Check if it's our target file and it was written to
-			if strings.HasPrefix(event.Name, smr.shmPath) &&
+			if event.Name == smr.shmPath &&
 				(event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create) {
 				// Small delay to ensure write is complete
 				time.Sleep(1 * time.Millisecond)
@@ -142,7 +141,7 @@ func (smr *SharedMemoryReceiver) SaveFrameForLater() {
 	for detectedFrame := range smr.SignificantFrames {
 		year, month, day := time.Now().Date()
 		path := fmt.Sprintf("%s/%d-%02d-%02d", SavePath, year, month, day)
-		i, path := TouchDirAndGetIterator(path, saveChunkSize) // 1GB
+		i, path := TouchDirAndGetIterator(path, saveChunkSize)
 		if detectedFrame.Data != nil {
 			if detectedFrame.After != nil && detectedFrame.After.Size() > 0 {
 				for _, frameAfter := range detectedFrame.After.GetAll() {
