@@ -74,15 +74,52 @@ func GetNewFileIndex(path string) (int, error) {
 
 	return maxNum + 1, nil
 }
+func GetDirsSortedByCreatedDesc(path string) ([]string, error) {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil, err
+	}
+	type dirInfo struct {
+		name  string
+		ctime int64
+	}
+	var dirs []dirInfo
+	for _, entry := range entries {
+		if entry.IsDir() {
+			info, err := entry.Info()
+			if err != nil {
+				continue
+			}
+			// Use ModTime as a proxy for creation time (Go doesn't expose ctime cross-platform)
+			dirs = append(dirs, dirInfo{name: entry.Name(), ctime: info.ModTime().Unix()})
+		}
+	}
+	sort.Slice(dirs, func(i, j int) bool {
+		return dirs[i].ctime > dirs[j].ctime // DESC
+	})
+	names := make([]string, len(dirs))
+	for i, d := range dirs {
+		names[i] = d.name
+	}
+	return names, nil
+}
 func TouchDirAndGetIterator(base_path string, size_limit int64) (int, string) {
 	dir_i := 1
-	path := filepath.Join(base_path, fmt.Sprintf("%d", dir_i))
-	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		if err := os.MkdirAll(path, 0755); err != nil {
-			panic(fmt.Sprintf("Cannot create directory: %v", err))
+	names, err := GetDirsSortedByCreatedDesc(base_path)
+	if err != nil {
+		path := filepath.Join(base_path, fmt.Sprintf("%d", dir_i))
+		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+			if err := os.MkdirAll(path, 0755); err != nil {
+				panic(fmt.Sprintf("Cannot create directory: %v", err))
+			}
 		}
-		return 0, path
+		return dir_i, path
 	}
+	if len(names) > 0 {
+		last_dir, _ := strconv.Atoi(names[0])
+		dir_i = last_dir
+	}
+	path := filepath.Join(base_path, fmt.Sprintf("%d", dir_i))
 	for {
 		size, _ := DirSize(path)
 		if size < size_limit {
@@ -108,18 +145,28 @@ func TouchDirAndGetIterator(base_path string, size_limit int64) (int, string) {
 	fmt.Printf("Using path: %s, index: %d\n", path, index)
 	return index, path
 }
-
-func GetOldestDateDirName(base_path string, skipDirs []string) (string, error) {
+func GetDateDirNames(base_path string, skipDirs []string) ([]string, error) {
 	dirs, err := os.ReadDir(base_path)
+	if err != nil {
+		return nil, err
+	}
+	dirNames := make([]string, 0)
+	for _, dir := range dirs {
+		if dir.IsDir() && len(dir.Name()) == 10 && !slices.Contains(skipDirs, dir.Name()) {
+			dirNames = append(dirNames, dir.Name())
+		}
+	}
+	return dirNames, nil
+}
+func GetOldestDateDirName(base_path string, skipDirs []string) (string, error) {
+	dirs, err := GetDateDirNames(base_path, skipDirs)
 	if err != nil {
 		return "", err
 	}
-	for _, dir := range dirs {
-		if dir.IsDir() && len(dir.Name()) == 10 && !slices.Contains(skipDirs, dir.Name()) {
-			return dir.Name(), nil
-		}
+	if len(dirs) == 0 {
+		return "", nil
 	}
-	return "", nil
+	return dirs[0], nil
 }
 func GetChunkNames(base_path string, skipDirs []string) ([]string, error) {
 	dirs, err := os.ReadDir(base_path)
@@ -147,6 +194,7 @@ func GetOldestChunkDirName(base_path string, skipDirs []string) (string, error) 
 	if len(dirNames) == 0 {
 		return "", nil
 	}
+	fmt.Printf("Oldest chunk dir names: %v\n", dirNames[0])
 	return dirNames[0], nil
 }
 
@@ -238,5 +286,6 @@ func CountChunksInDateDir(base_path string, skipDirs []string) int {
 	}
 	chunkPath := fmt.Sprintf("%s/%s", base_path, lastDir)
 	chunks, _ := os.ReadDir(chunkPath)
+	fmt.Printf("Chunks in date dir %v\n", chunks)
 	return len(chunks)
 }

@@ -6,15 +6,18 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
 )
 
 type Converter struct {
-	savePath string
-	watcher  *fsnotify.Watcher
-	hasJob   bool
+	savePath     string
+	watcher      *fsnotify.Watcher
+	hasJob       bool
+	watchingDirs []string
+	mux          sync.RWMutex
 }
 
 func NewConverter(savePath string) (*Converter, error) {
@@ -22,12 +25,19 @@ func NewConverter(savePath string) (*Converter, error) {
 	if err != nil {
 		return nil, err
 	}
-	watcher.Add(savePath)
-	return &Converter{
-		savePath: savePath,
-		watcher:  watcher,
-		hasJob:   false,
-	}, nil
+	c := &Converter{
+		savePath:     savePath,
+		watcher:      watcher,
+		hasJob:       false,
+		watchingDirs: []string{savePath},
+	}
+	c.AddToWatch(savePath)
+	dateDirs, _ := GetDateDirNames(savePath, []string{})
+	fmt.Printf("Watching directories: %v\n", dateDirs)
+	for _, dateDir := range dateDirs {
+		c.AddToWatch(filepath.Join(savePath, dateDir))
+	}
+	return c, nil
 }
 func (c *Converter) Watch() {
 	for {
@@ -66,6 +76,10 @@ func (c *Converter) Close() {
 	if c.watcher != nil {
 		c.watcher.Close()
 	}
+}
+func (c *Converter) AddToWatch(path string) {
+	c.watchingDirs = append(c.watchingDirs, path)
+	c.watcher.Add(path)
 }
 func (c *Converter) GetSkipDates() []string {
 	now := time.Now()
@@ -123,6 +137,7 @@ func Convert(chunkPath string) error {
 
 func ConvertLastChunkToVideo(savePath string) bool {
 	dirCount := CountChunksInDateDir(savePath, []string{})
+	fmt.Printf("Number of chunks in date dir: %d\n", dirCount)
 	chunkPath := GetOldestChunkInDateDir(savePath, []string{})
 	if chunkPath == "" {
 		fmt.Println("No chunk found to convert.")
@@ -132,35 +147,50 @@ func ConvertLastChunkToVideo(savePath string) bool {
 	parts := strings.Split(chunkPath, "/")
 	dateDir := parts[len(parts)-2]
 	now := time.Now()
+	fmt.Printf("dir count %d, date dir %s, now %s\n", dirCount, dateDir, now.Format("2006-01-02"))
 	if dirCount < 2 && dateDir == now.Format("2006-01-02") {
+		// For now just skip last chunk, idea for changing this is to save size and
+		// convert all frames, then create a new video from it. Then concatenate
+		// the videos together with adding size. When the size is close to the limit
+		// just create a new chunk and remove the old one.
+		// This will allow to convert the last chunk and not wait for the next one.
 		fmt.Println("There is only one chunk that can be busy.")
 		return false
 	}
 	Convert(chunkPath)
-	os.RemoveAll(chunkPath)
+	err := os.RemoveAll(chunkPath)
+	if err != nil {
+		panic(fmt.Sprintf("Error removing chunk directory: %v\n", err))
+	}
 	return true
+}
+
+func (c *Converter) RunUntilComplete() {
+	skipDates := c.GetSkipDates()
+	c.mux.Lock()
+	defer c.mux.Unlock()
+	for {
+		RemoveOldestDirs(SavePath, skipDates)
+		RemoveOldestVideoFiles(SavePath, skipDates)
+		c.hasJob = ConvertLastChunkToVideo(SavePath)
+		if !c.hasJob {
+			break
+		}
+	}
 }
 
 func StartWorkflow() {
 	converter, _ := NewConverter(SavePath)
+	converter.RunUntilComplete()
 	defer converter.Close()
 	go func() {
 		ticker := time.NewTicker(10 * time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
 			if !converter.hasJob {
-				skipDates := converter.GetSkipDates()
-				for {
-					RemoveOldestDirs(SavePath, skipDates)
-					RemoveOldestVideoFiles(SavePath, skipDates)
-					converter.hasJob = ConvertLastChunkToVideo(SavePath)
-					if !converter.hasJob {
-						break
-					}
-				}
+				converter.RunUntilComplete()
 			}
 		}
 	}()
-
 	converter.Watch()
 }
