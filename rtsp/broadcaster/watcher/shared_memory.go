@@ -11,6 +11,16 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
+type PathProvider interface {
+	GetSavePath() string
+}
+
+type DefaultPathProvider struct{}
+
+func (d DefaultPathProvider) GetSavePath() string {
+	return SavePath
+}
+
 type SignificantFrame struct {
 	Data     *[]byte
 	Detected int
@@ -23,10 +33,11 @@ type SharedMemoryReceiver struct {
 	watcher           *fsnotify.Watcher
 	Frames            chan []byte
 	SignificantFrames chan SignificantFrame
+	pathProvider      PathProvider
 }
 
-func NewSharedMemoryReceiver(shmName string) (*SharedMemoryReceiver, error) {
-	if err := os.MkdirAll(SavePath, 0755); err != nil {
+func NewSharedMemoryReceiverWithPath(shmName string, pathProvider PathProvider) (*SharedMemoryReceiver, error) {
+	if err := os.MkdirAll(pathProvider.GetSavePath(), 0755); err != nil {
 		panic(fmt.Sprintf("Cannot create directory: %v", err))
 	}
 	watcher, err := fsnotify.NewWatcher()
@@ -39,6 +50,7 @@ func NewSharedMemoryReceiver(shmName string) (*SharedMemoryReceiver, error) {
 		watcher:           watcher,
 		Frames:            make(chan []byte),
 		SignificantFrames: make(chan SignificantFrame),
+		pathProvider:      pathProvider,
 	}
 
 	// Watch the shared memory directory
@@ -49,6 +61,10 @@ func NewSharedMemoryReceiver(shmName string) (*SharedMemoryReceiver, error) {
 	go receiver.SaveFrameForLater()
 
 	return receiver, nil
+}
+
+func NewSharedMemoryReceiver(shmName string) (*SharedMemoryReceiver, error) {
+	return NewSharedMemoryReceiverWithPath(shmName, DefaultPathProvider{})
 }
 
 func (smr *SharedMemoryReceiver) readFrameFromShm() ([]byte, int, error) {
@@ -140,7 +156,7 @@ func (smr *SharedMemoryReceiver) Close() {
 func (smr *SharedMemoryReceiver) SaveFrameForLater() {
 	for detectedFrame := range smr.SignificantFrames {
 		year, month, day := time.Now().Date()
-		path := fmt.Sprintf("%s/%d-%02d-%02d", SavePath, year, month, day)
+		path := fmt.Sprintf("%s/%d-%02d-%02d", smr.pathProvider.GetSavePath(), year, month, day)
 		i, path := TouchDirAndGetIterator(path, saveChunkSize)
 		if detectedFrame.Data != nil {
 			if detectedFrame.After != nil && detectedFrame.After.Size() > 0 {
