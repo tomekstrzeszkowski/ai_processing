@@ -2,6 +2,7 @@ package watcher
 
 import (
 	"encoding/binary"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -84,6 +85,56 @@ func TestSharedMemory(t *testing.T) {
 			}
 		case <-timeout:
 			t.Fatal("Timeout waiting for frame")
+		}
+	})
+}
+func TestSaveSignificantFrameForLaterWhenDirIsEmpty(t *testing.T) {
+	tempPath := t.TempDir()
+	PathProvider := TestPathProvider{path: tempPath}
+	data := []byte("test data")
+	defer os.Remove("/dev/shm/test_shm")
+
+	receiver, _ := NewSharedMemoryReceiverWithPath("test_shm", PathProvider)
+	defer receiver.Close()
+	go receiver.WatchSharedMemory()
+
+	t.Run("DetectedFrame", func(t *testing.T) {
+		createFrame(data, 1, "test_shm")
+		timeout := time.After(2 * time.Second)
+		hasFrames := make(chan bool, 1)
+		hasSignificant := make(chan bool, 1)
+		go func() {
+			select {
+			case frame := <-receiver.Frames:
+				if string(frame) != string(data) {
+					t.Errorf("Expected frame data %s, got %s", data, frame)
+				}
+				hasFrames <- true
+			case <-timeout:
+				hasFrames <- false
+			}
+		}()
+		go func() {
+			select {
+			case sf := <-receiver.SignificantFrames:
+				fmt.Printf("Received significant frame: %s\n", sf.Data)
+				if sf.Data == nil {
+					t.Error("Expected frame data")
+				}
+				dirs, _ := os.ReadDir(tempPath)
+				if len(dirs) != 0 {
+					t.Errorf("Expected temp directory to be empty, got %d files", len(dirs))
+				}
+				hasSignificant <- true
+			case <-timeout:
+				hasSignificant <- false
+			}
+		}()
+		if !<-hasFrames {
+			t.Fatal("Timeout waiting for regular frame")
+		}
+		if !<-hasSignificant {
+			t.Fatal("Timeout waiting for significant frame")
 		}
 	})
 }

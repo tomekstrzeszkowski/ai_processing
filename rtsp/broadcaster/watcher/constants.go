@@ -2,11 +2,13 @@ package watcher
 
 const SavePath = "./saved"
 
-const ConvertFramesBeforeDays = 2
+// Persisting frames
+const ConvertFramesBeforeDays = 1
 
-const saveChunkSize = 1024 * 1024 * 1024 // 1GB
-// const convertedVideoSpace = 1024 * 1024 * 1024 // 1GB
-const convertedVideoSpace = 10 * 1024 * 1024
+const saveChunkSize = 5 * 1024 * 1024        //1024 * 1024 * 1024 // 1GB
+const convertedVideoSpace = 10 * 1024 * 1024 //10 *1024 * 1024 * 1024 // 10GB
 
-// const saveChunkSize = 9 * 1024 * 1024 // 9MB
 const saveDirMaxSize = 100*saveChunkSize + convertedVideoSpace
+
+const showWhatWasBefore = 90000 // 30 FPS * 60 seconds * 5 minutes = 90000 frames
+const showWhatWasAfter = 90000  // 30 FPS * 60 seconds * 5 minutes = 90000 frames

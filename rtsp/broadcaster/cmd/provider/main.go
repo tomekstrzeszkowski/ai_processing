@@ -14,6 +14,7 @@ func main() {
 	memory, _ := watcher.NewSharedMemoryReceiver("video_frame")
 	defer memory.Close()
 	go memory.WatchSharedMemory()
+	go memory.SaveFrameForLater()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

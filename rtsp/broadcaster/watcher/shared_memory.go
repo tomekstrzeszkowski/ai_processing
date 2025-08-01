@@ -48,8 +48,8 @@ func NewSharedMemoryReceiverWithPath(shmName string, pathProvider PathProvider) 
 	receiver := &SharedMemoryReceiver{
 		shmPath:           filepath.Join("/dev/shm", shmName),
 		watcher:           watcher,
-		Frames:            make(chan []byte),
-		SignificantFrames: make(chan SignificantFrame),
+		Frames:            make(chan []byte, 10),
+		SignificantFrames: make(chan SignificantFrame, 100),
 		pathProvider:      pathProvider,
 	}
 
@@ -58,7 +58,6 @@ func NewSharedMemoryReceiverWithPath(shmName string, pathProvider PathProvider) 
 	if err != nil {
 		return nil, err
 	}
-	go receiver.SaveFrameForLater()
 
 	return receiver, nil
 }
@@ -88,10 +87,17 @@ func (smr *SharedMemoryReceiver) readFrameFromShm() ([]byte, int, error) {
 	frameData := data[5 : 5+dataLength]
 	return frameData, detected, nil
 }
+func (smr *SharedMemoryReceiver) SendSignificantFrame(sf SignificantFrame) {
+	select {
+	case smr.SignificantFrames <- sf:
+	case <-time.After(100 * time.Millisecond):
+		log.Printf("Timeout sending significant frame")
+	}
+}
 func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 	log.Println("Starting shared memory watcher...")
 
-	before := NewCircularBuffer(2) // 30 FPS * 60 seconds * 5 minutes = 90000 frames
+	before := NewCircularBuffer(showWhatWasBefore)
 	var after *CircularBuffer
 	for {
 		select {
@@ -117,13 +123,11 @@ func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 				if detected != -1 {
 					frameSignificant := make([]byte, len(frameData))
 					copy(frameSignificant, frameData)
-					sf := SignificantFrame{Data: &frameSignificant, Detected: detected, Before: before, After: after}
-					select {
-					case smr.SignificantFrames <- sf:
-					default:
-						log.Printf("Significant frame channel is full, dropping frame and so sorry")
+					sf := SignificantFrame{
+						Data: &frameSignificant, Detected: detected, Before: before, After: after,
 					}
-					after = NewCircularBuffer(2)
+					go smr.SendSignificantFrame(sf)
+					after = NewCircularBuffer(showWhatWasAfter)
 				} else if after != nil {
 					after.Add(frameData)
 				} else {
@@ -131,11 +135,7 @@ func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 				}
 				if after != nil && after.IsFull() {
 					sf := SignificantFrame{Data: nil, Detected: -1, Before: before, After: after}
-					select {
-					case smr.SignificantFrames <- sf:
-					default:
-						log.Printf("After buffer is full, dropping frame and so sorry")
-					}
+					go smr.SendSignificantFrame(sf)
 					after = nil
 				}
 			}
