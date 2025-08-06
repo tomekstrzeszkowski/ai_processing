@@ -46,7 +46,7 @@ func main() {
 				log.Println("Exiting.")
 				return
 			case <-ticker.C:
-				frames := viewer.GetFrames()
+				_, frames, _ := viewer.GetFrames()
 				frameCount := len(frames)
 				if frameCount > 0 {
 					log.Printf("Broadcasting frames: %d\n", frameCount)

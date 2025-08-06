@@ -1,4 +1,5 @@
 import cv2
+from functools import cached_property
 import numpy as np
 from yolo_object import YoloObject, YOLO_MODEL_NAME_TO_SCALE_TO_ORIGINAL
 
@@ -47,11 +48,12 @@ class Detector:
     def _resize(self):
         return YOLO_MODEL_NAME_TO_SCALE_TO_ORIGINAL.get(self.yolo_model_name, 1)
 
-    def _get_model(self):
+    @cached_property
+    def model(self):
         return cv2.dnn.readNetFromONNX(self.yolo_model_name)
 
     def _scale_input(self, original_image):
-        net = self._get_model()
+        net = self.model
         [height, width, _] = original_image.shape
         # Prepare a square image for inference
         length = max((height, width))

@@ -10,19 +10,18 @@ load_dotenv()
 
 
 def process_frame(frame, detector):
-    processed_frame = frame.copy()
-    height, width = processed_frame.shape[:2]
+    height, width = frame.shape[:2]
     scaled_frame = cv2.resize(
-        processed_frame, (int(width * 0.99), int(height * 0.99))
+        frame, (int(width * 0.99), int(height * 0.99))
     )
     detected_objects = 0
     type_ = -1
     for x0, y0, w, h, type_, scale in detector.detect_yolo_with_nms(scaled_frame):
-        cv2.rectangle(processed_frame, (x0, y0), (x0 + w, y0 + h), (0, 255, 0), 1)
+        cv2.rectangle(frame, (x0, y0), (x0 + w, y0 + h), (0, 255, 0), 1)
         cv2.putText(
-            processed_frame,
+            frame,
             f"Detected {detector.yolo_class_id_to_verbose[type_]}!",
-            (x0+10, y0+20),
+            (x0+10, y0+20),f
             cv2.FONT_HERSHEY_SIMPLEX,
             0.5,
             (0, 255, 0),
@@ -31,7 +30,7 @@ def process_frame(frame, detector):
         detected_objects += 1
     if detected_objects:
         cv2.putText(
-            processed_frame, 
+            frame, 
             f"Objects: {detected_objects}", 
             (20, 20), 
             cv2.FONT_HERSHEY_SIMPLEX, 
@@ -40,7 +39,7 @@ def process_frame(frame, detector):
             2,
         )
     
-    return processed_frame, type_
+    return frame, type_
 
 def main():
     url = os.getenv("IP_CAM_URL", "copy .env.template")
@@ -106,6 +105,7 @@ def main():
                 write_frame_to_shared_memory(
                     buffer, type_, shm_name=f"video_frame"
                 )
+                del buffer
             elapsed_time = time.time() - start_time
             if elapsed_time > 1.0:  # Update every second
                 actual_fps = frame_count / elapsed_time

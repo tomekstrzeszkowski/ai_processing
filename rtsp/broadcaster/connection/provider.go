@@ -2,7 +2,9 @@ package connection
 
 import (
 	"context"
+	"encoding/binary"
 	"log"
+	"time"
 
 	"github.com/libp2p/go-libp2p/core/event"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -42,8 +44,11 @@ func (c *Provider) StartListening(ctx context.Context) {
 	fullAddr := GetHostAddress(c.host)
 	log.Printf("I am %s\n", fullAddr)
 	c.host.SetStreamHandler("/get-frame/1.0.0", func(stream network.Stream) {
+		now := time.Now()
+		timestamp := make([]byte, 8)
+		binary.BigEndian.PutUint64(timestamp, uint64(now.UnixMicro()))
 		for _, frame := range c.frameBuffer {
-			stream.Write(frame)
+			stream.Write(append(timestamp, frame...))
 		}
 		stream.Close()
 		c.frameBuffer = [][]byte{}

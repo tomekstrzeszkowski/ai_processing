@@ -6,6 +6,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from yolo_object import YoloObject, YOLO_MODEL_NAME_TO_SCALE_TO_ORIGINAL
 from detector import Detector
 from saver import write_frame_to_shared_memory
+from datetime import datetime
 
 file_name = "video.mp4"
 
@@ -42,13 +43,12 @@ if __name__ == "__main__":
             break
         frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         print(f"{i}/{length}")
-        frame_draw = frame.copy()
-        frame_array = np.array(frame_draw)
+        frame_array = np.array(frame)
         # scale for faster detections
         frame_array = cv2.resize(
-            frame_array, (int(frame_draw.size[0] * 0.99), int(frame_draw.size[1] * 0.99))
+            frame_array, (int(frame.size[0] * 0.99), int(frame.size[1] * 0.99))
         )
-        draw = ImageDraw.Draw(frame_draw)
+        draw = ImageDraw.Draw(frame)
         # detect humans
         detected = 0
         type_ = -1
@@ -64,9 +64,10 @@ if __name__ == "__main__":
                 (255, 255, 255),
                 2,
             )
+        now_label = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         cv2.putText(
             frame_array,
-            f"Objects: {detected}",
+            f"{now_label} objects: {detected}",
             (20, 20),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.7,
@@ -92,6 +93,7 @@ if __name__ == "__main__":
             write_frame_to_shared_memory(
                 buffer, type_, shm_name=f"video_frame"
             )
+            del buffer  # explicit free-up memory
         frames_tracked.append(frame_draw.resize((width, height), Image.BILINEAR))
 
 
