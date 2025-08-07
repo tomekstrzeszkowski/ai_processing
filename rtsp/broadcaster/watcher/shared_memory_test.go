@@ -6,6 +6,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 type TestPathProvider struct {
@@ -16,18 +18,44 @@ func (tp TestPathProvider) GetSavePath() string {
 	return tp.path
 }
 
-func createFrame(buffer []byte, detected byte, shmName string) {
+func createFrameWithDelay(buffer []byte, detected int, shmName string) {
 	header := make([]byte, 5)
-	header[0] = detected
+	header[0] = byte(detected)
 	binary.LittleEndian.PutUint32(header[1:], uint32(len(buffer)))
-	file, err := os.Create("/dev/shm/" + shmName)
+
+	totalSize := len(header) + len(buffer)
+	filePath := "/dev/shm/" + shmName
+
+	// Create and size the file atomically
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0644)
 	if err != nil {
-		panic("Failed to create shared memory file: " + err.Error())
+		panic("Failed to create file: " + err.Error())
 	}
 	defer file.Close()
-	file.Write(header)
-	file.Write(buffer)
-	file.Sync()
+
+	err = file.Truncate(int64(totalSize))
+	if err != nil {
+		panic("Failed to truncate file: " + err.Error())
+	}
+
+	// Memory map the file
+	data, err := unix.Mmap(int(file.Fd()), 0, totalSize, unix.PROT_WRITE, unix.MAP_SHARED)
+	if err != nil {
+		panic("Failed to mmap file: " + err.Error())
+	}
+	defer unix.Munmap(data)
+
+	// Copy data directly to memory
+	copy(data[:len(header)], header)
+	copy(data[len(header):], buffer)
+
+	// Sync to disk
+	err = unix.Msync(data, unix.MS_SYNC)
+	if err != nil {
+		panic("Failed to msync file: " + err.Error())
+	}
+	fmt.Printf("Created shm file /dev/shm/%v %v", shmName, string(buffer))
+	time.Sleep(10 * time.Millisecond)
 }
 
 func TestSharedMemory(t *testing.T) {
@@ -52,7 +80,7 @@ func TestSharedMemory(t *testing.T) {
 	})
 	t.Run("DetectedFrame", func(t *testing.T) {
 		data := []byte("test data")
-		createFrame(data, 0, "test_shm")
+		createFrameWithDelay(data, 0, "test_shm")
 		defer os.Remove("/dev/shm/test_shm")
 		receiver, _ := NewSharedMemoryReceiverWithPath("test_shm", PathProvider)
 		defer receiver.Close()
@@ -75,8 +103,7 @@ func TestSharedMemory(t *testing.T) {
 		receiver, _ := NewSharedMemoryReceiverWithPath("test_shm", PathProvider)
 		defer receiver.Close()
 		go receiver.WatchSharedMemory()
-		time.Sleep(10 * time.Millisecond)
-		createFrame(data, 1, "test_shm")
+		createFrameWithDelay(data, 1, "test_shm")
 		timeout := time.After(2 * time.Second)
 		select {
 		case frame := <-receiver.Frames:
@@ -93,13 +120,11 @@ func TestSaveSignificantFrameForLaterWhenDirIsEmpty(t *testing.T) {
 	PathProvider := TestPathProvider{path: tempPath}
 	data := []byte("test data")
 	defer os.Remove("/dev/shm/test_shm")
-
-	receiver, _ := NewSharedMemoryReceiverWithPath("test_shm", PathProvider)
-	defer receiver.Close()
-	go receiver.WatchSharedMemory()
-
 	t.Run("DetectedFrame", func(t *testing.T) {
-		createFrame(data, 1, "test_shm")
+		receiver, _ := NewSharedMemoryReceiverWithPath("test_shm", PathProvider)
+		defer receiver.Close()
+		go receiver.WatchSharedMemory()
+		createFrameWithDelay(data, 1, "test_shm")
 		timeout := time.After(2 * time.Second)
 		hasFrames := make(chan bool, 1)
 		hasSignificant := make(chan bool, 1)
@@ -133,6 +158,87 @@ func TestSaveSignificantFrameForLaterWhenDirIsEmpty(t *testing.T) {
 		if !<-hasFrames {
 			t.Fatal("Timeout waiting for regular frame")
 		}
+		if !<-hasSignificant {
+			t.Fatal("Timeout waiting for significant frame")
+		}
+	})
+	t.Run("SendFramesBeforeDetection", func(t *testing.T) {
+		receiver, _ := NewSharedMemoryReceiverWithPath("test_shm", PathProvider)
+		defer receiver.Close()
+		go receiver.WatchSharedMemory()
+		createFrameWithDelay([]byte("nothing 1"), -1, "test_shm")
+		createFrameWithDelay([]byte("nothing 2"), -1, "test_shm")
+		createFrameWithDelay(data, 0, "test_shm")
+		timeout := time.After(10 * time.Second)
+		hasSignificant := make(chan bool, 1)
+		go func() {
+			select {
+			case <-receiver.Frames:
+			}
+		}()
+		go func() {
+			select {
+			case sf := <-receiver.SignificantFrames:
+				fmt.Printf("Received significant frame: %s\n", sf.Data)
+				if sf.Data == nil {
+					t.Error("Expected frame data")
+				}
+				if sf.Before.Size() != 2 {
+					t.Error("Buffer size is incorrectf")
+				}
+				if sf.After != nil {
+					t.Errorf("Buffer size is incorrect %v", sf.After.Size())
+				}
+				hasSignificant <- true
+			case <-timeout:
+				hasSignificant <- false
+			}
+		}()
+		if !<-hasSignificant {
+			t.Fatal("Timeout waiting for significant frame")
+		}
+	})
+	t.Run("SendFramesAfterDetection", func(t *testing.T) {
+		receiver, _ := NewSharedMemoryReceiverWithPath("test_shm", PathProvider)
+		defer receiver.Close()
+		go receiver.WatchSharedMemory()
+		createFrameWithDelay(data, 0, "test_shm")
+		createFrameWithDelay([]byte("nothing 1"), -1, "test_shm")
+		createFrameWithDelay([]byte("nothing 2"), -1, "test_shm")
+		createFrameWithDelay(data, 0, "test_shm")
+		timeout := time.After(10 * time.Second)
+		called := 0
+		hasSignificant := make(chan bool, 1)
+		go func() {
+			select {
+			case fr := <-receiver.Frames:
+				fmt.Printf("FRA %v\n", fr)
+			}
+		}()
+		go func() {
+			for {
+				select {
+				case sf := <-receiver.SignificantFrames:
+					called++
+					fmt.Printf("Received %v\n", sf)
+					if called == 2 {
+						fmt.Printf("Received significant frame: %s\n", sf.Data)
+						if sf.Data == nil {
+							t.Error("Expected frame data")
+						}
+						if sf.Before.Size() != 0 {
+							t.Error("Buffer size is incorrectf")
+						}
+						if sf.After.Size() != 2 {
+							t.Errorf("Buffer size is incorrect %v", sf.After.Size())
+						}
+						hasSignificant <- true
+					}
+				case <-timeout:
+					hasSignificant <- false
+				}
+			}
+		}()
 		if !<-hasSignificant {
 			t.Fatal("Timeout waiting for significant frame")
 		}

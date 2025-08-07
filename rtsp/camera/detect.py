@@ -54,7 +54,7 @@ if __name__ == "__main__":
         type_ = -1
         for x0, y0, w, h, type_, scale in detector.detect_yolo_with_largest_box(frame_array):
             detected += 1
-            cv2.rectangle(frame_array, (x0, y0), (x0 + w, y0 + h), (0, 0, 255), 2)
+            cv2.rectangle(frame_array, (x0, y0), (x0 + w, y0 + h), (0, 255, 0), 2)
             cv2.putText(
                 frame_array,
                 f"Detected {yolo_object_to_verbose[type_]}",

@@ -1,6 +1,7 @@
 package watcher
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -99,6 +100,7 @@ func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 
 	before := NewCircularBuffer(showWhatWasBefore)
 	var after *CircularBuffer
+	var lastFrameData []byte
 	for {
 		select {
 		case event, ok := <-smr.watcher.Events:
@@ -109,18 +111,22 @@ func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 			// Check if it's our target file and it was written to
 			if event.Name == smr.shmPath &&
 				(event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create) {
-				// Small delay to ensure write is complete
-				time.Sleep(1 * time.Millisecond)
 
 				frameData, detected, err := smr.readFrameFromShm()
 				if err != nil {
 					log.Printf("Error reading frame from shared memory: %v", err)
 					continue
 				}
+				// skip the same event triggered twice
+				if bytes.Equal(frameData, lastFrameData) {
+					continue
+				}
+				lastFrameData = frameData
 
 				log.Printf("New frame received: %d bytes, that was %d", len(frameData), detected)
 				smr.Frames <- frameData
 				if detected != -1 {
+					log.Print(">>>>>>>>")
 					frameSignificant := make([]byte, len(frameData))
 					copy(frameSignificant, frameData)
 					sf := SignificantFrame{
