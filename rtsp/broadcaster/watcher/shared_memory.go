@@ -12,14 +12,22 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-type PathProvider interface {
+type ConfigProvider interface {
 	GetSavePath() string
+	GetShowWhatWasBefore() int
+	GetShowWhatWasAfter() int
 }
 
-type DefaultPathProvider struct{}
+type DefaultConfigProvider struct{}
 
-func (d DefaultPathProvider) GetSavePath() string {
+func (d DefaultConfigProvider) GetSavePath() string {
 	return SavePath
+}
+func (d DefaultConfigProvider) GetShowWhatWasBefore() int {
+	return showWhatWasBefore
+}
+func (d DefaultConfigProvider) GetShowWhatWasAfter() int {
+	return showWhatWasAfter
 }
 
 type SignificantFrame struct {
@@ -34,11 +42,11 @@ type SharedMemoryReceiver struct {
 	watcher           *fsnotify.Watcher
 	Frames            chan []byte
 	SignificantFrames chan SignificantFrame
-	pathProvider      PathProvider
+	configProvider    ConfigProvider
 }
 
-func NewSharedMemoryReceiverWithPath(shmName string, pathProvider PathProvider) (*SharedMemoryReceiver, error) {
-	if err := os.MkdirAll(pathProvider.GetSavePath(), 0755); err != nil {
+func NewSharedMemoryReceiverWithConfig(shmName string, configProvider ConfigProvider) (*SharedMemoryReceiver, error) {
+	if err := os.MkdirAll(configProvider.GetSavePath(), 0755); err != nil {
 		panic(fmt.Sprintf("Cannot create directory: %v", err))
 	}
 	watcher, err := fsnotify.NewWatcher()
@@ -51,7 +59,7 @@ func NewSharedMemoryReceiverWithPath(shmName string, pathProvider PathProvider) 
 		watcher:           watcher,
 		Frames:            make(chan []byte, 10),
 		SignificantFrames: make(chan SignificantFrame, 100),
-		pathProvider:      pathProvider,
+		configProvider:    configProvider,
 	}
 
 	// Watch the shared memory directory
@@ -64,7 +72,7 @@ func NewSharedMemoryReceiverWithPath(shmName string, pathProvider PathProvider) 
 }
 
 func NewSharedMemoryReceiver(shmName string) (*SharedMemoryReceiver, error) {
-	return NewSharedMemoryReceiverWithPath(shmName, DefaultPathProvider{})
+	return NewSharedMemoryReceiverWithConfig(shmName, DefaultConfigProvider{})
 }
 
 func (smr *SharedMemoryReceiver) readFrameFromShm() ([]byte, int, error) {
@@ -97,7 +105,8 @@ func (smr *SharedMemoryReceiver) SendSignificantFrame(sf SignificantFrame) {
 }
 func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 	log.Println("Starting shared memory watcher...")
-
+	showWhatWasAfter := smr.configProvider.GetShowWhatWasAfter()
+	showWhatWasBefore := smr.configProvider.GetShowWhatWasBefore()
 	before := NewCircularBuffer(showWhatWasBefore)
 	var after *CircularBuffer
 	var lastFrameData []byte
@@ -126,7 +135,6 @@ func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 				log.Printf("New frame received: %d bytes, that was %d", len(frameData), detected)
 				smr.Frames <- frameData
 				if detected != -1 {
-					log.Print(">>>>>>>>")
 					frameSignificant := make([]byte, len(frameData))
 					copy(frameSignificant, frameData)
 					sf := SignificantFrame{
@@ -162,7 +170,7 @@ func (smr *SharedMemoryReceiver) Close() {
 func (smr *SharedMemoryReceiver) SaveFrameForLater() {
 	for detectedFrame := range smr.SignificantFrames {
 		year, month, day := time.Now().Date()
-		path := fmt.Sprintf("%s/%d-%02d-%02d", smr.pathProvider.GetSavePath(), year, month, day)
+		path := fmt.Sprintf("%s/%d-%02d-%02d", smr.configProvider.GetSavePath(), year, month, day)
 		i, path := TouchDirAndGetIterator(path, saveChunkSize)
 		if detectedFrame.Data != nil {
 			if detectedFrame.After != nil && detectedFrame.After.Size() > 0 {

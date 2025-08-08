@@ -47,8 +47,9 @@ func (c *Provider) StartListening(ctx context.Context) {
 		now := time.Now()
 		timestamp := make([]byte, 8)
 		binary.BigEndian.PutUint64(timestamp, uint64(now.UnixMicro()))
+		stream.Write(timestamp)
 		for _, frame := range c.frameBuffer {
-			stream.Write(append(timestamp, frame...))
+			stream.Write(frame)
 		}
 		stream.Close()
 		c.frameBuffer = [][]byte{}

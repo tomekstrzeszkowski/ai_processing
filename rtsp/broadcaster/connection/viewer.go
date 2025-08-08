@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"sort"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
@@ -21,43 +20,24 @@ type Viewer struct {
 	lastFramePacket *time.Time
 }
 
-func splitTimestampedJPEGFrames(data []byte) ([]time.Time, [][]byte, error) {
-	var timestamps []time.Time
+func splitJPEGFrames(data []byte) ([][]byte, error) {
 	var frames [][]byte
 	start := 0
 
-	for i := 8; i < len(data)-1; i++ { // Start at byte 8 (after first timestamp)
+	for i := 0; i < len(data)-1; i++ {
 		// Look for JPEG start marker (0xFF 0xD8)
-		if data[i] == 0xFF && data[i+1] == 0xD8 && i > start+8 {
-			// Extract timestamp from current frame (8 bytes before frame data)
-			timestampBytes := data[start : start+8]
-			unixTimestamp := binary.BigEndian.Uint64(timestampBytes)
-			timestamp := time.UnixMicro(int64(unixTimestamp))
-			timestamps = append(timestamps, timestamp)
-
-			// Extract frame data (skip the 8-byte timestamp)
-			frames = append(frames, data[start+8:i])
-			start = i - 8 // Next timestamp starts 8 bytes before JPEG marker
+		if data[i] == 0xFF && data[i+1] == 0xD8 && i > start {
+			frames = append(frames, data[start:i])
+			start = i
 		}
 	}
 
 	// Add the last frame
 	if start < len(data) {
-		if start+8 >= len(data) {
-			return timestamps, frames, fmt.Errorf("incomplete frame: not enough data for timestamp")
-		}
-
-		// Extract timestamp for last frame
-		timestampBytes := data[start : start+8]
-		unixTimestamp := binary.BigEndian.Uint64(timestampBytes)
-		timestamp := time.UnixMicro(int64(unixTimestamp))
-		timestamps = append(timestamps, timestamp)
-
-		// Extract last frame data
-		frames = append(frames, data[start+8:])
+		frames = append(frames, data[start:])
 	}
 
-	return timestamps, frames, nil
+	return frames, nil
 }
 func CreateAndConnectNewViewer(ctx context.Context, host *host.Host, info peer.AddrInfo) (*Viewer, error) {
 	fullAddr := GetHostAddress(*host)
@@ -76,50 +56,40 @@ func CreateAndConnectNewViewer(ctx context.Context, host *host.Host, info peer.A
 	}, nil
 }
 
-func (v *Viewer) GetFrame() []byte {
+func (v *Viewer) GetData() (*time.Time, []byte) {
 	stream, err := (*v.Host).NewStream(context.Background(), (*v.Info).ID, "/get-frame/1.0.0")
 	if err != nil {
 		log.Println(err)
-		return []byte{}
+		return nil, []byte{}
 	}
 	defer stream.Close()
 
 	data, err := io.ReadAll(stream)
 	if err != nil {
 		log.Printf("Error reading stream: %v", err)
-		return []byte{}
+		return nil, []byte{}
 	}
+	timestampBytes := data[0:8]
+	unixTimestamp := binary.BigEndian.Uint64(timestampBytes)
+	timestamp := time.UnixMicro(int64(unixTimestamp))
 
-	return data
+	return &timestamp, data[8:]
 }
-func (v *Viewer) sortFramesByTimestamp(ts []time.Time, frames [][]byte) ([]time.Time, [][]byte) {
-	indices := make([]int, len(ts))
-	for i := range indices {
-		indices[i] = i
+func (v *Viewer) isTimestampHealthy(ts *time.Time) bool {
+	if ts == nil {
+		return false
 	}
-	sort.Slice(indices, func(i, j int) bool {
-		return ts[indices[i]].Before(ts[indices[j]])
-	})
-
-	var sortedTs []time.Time
-	var sortedFrames [][]byte
-
-	for _, idx := range indices {
-		if v.lastFramePacket == nil {
-			v.lastFramePacket = &ts[idx]
-		}
-		log.Printf("sorting %s", ts[idx])
-		if !v.lastFramePacket.After(ts[idx]) {
-			sortedTs = append(sortedTs, ts[idx])
-			sortedFrames = append(sortedFrames, frames[idx])
-			v.lastFramePacket = &ts[idx]
-		}
-
-	}
-	return sortedTs, sortedFrames
+	return !v.lastFramePacket.After(*ts)
 }
-func (v *Viewer) GetFrames() ([]time.Time, [][]byte, error) {
-	ts, frames, _ := splitTimestampedJPEGFrames(v.GetFrame())
-	ts, frames = v.sortFramesByTimestamp(ts, frames)
-	return ts, frames, nil
+func (v *Viewer) GetFrames() ([][]byte, error) {
+	ts, dataFrames := v.GetData()
+	if v.lastFramePacket == nil {
+		v.lastFramePacket = ts
+	}
+	if !v.isTimestampHealthy(ts) {
+		return nil, fmt.Errorf("Received frames from the past!")
+	}
+	v.lastFramePacket = ts
+	frames, _ := splitJPEGFrames(dataFrames)
+	return frames, nil
 }
