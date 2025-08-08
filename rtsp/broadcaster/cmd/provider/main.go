@@ -12,9 +12,12 @@ import (
 func main() {
 	// Create a key from the rendezvous string
 	memory, _ := watcher.NewSharedMemoryReceiver("video_frame")
-	defer memory.Close()
-	go memory.WatchSharedMemory()
-	go memory.SaveFrameForLater()
+	converter, _ := watcher.NewConverter(watcher.SavePath)
+	creator, _ := watcher.NewVideoCreator(memory, converter)
+	defer creator.Close()
+	go creator.StartWatchingFrames()
+	go creator.SaveFramesForLater()
+	go creator.StartConversionWorkflow()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -31,7 +34,7 @@ func main() {
 	connection.AnnounceDHT(ctx, kademliaDHT, connection.RendezVous)
 
 	go func() {
-		for frame := range memory.Frames {
+		for frame := range creator.SharedMemoryReceiver.Frames {
 			Provider.BroadcastFrame(frame)
 		}
 	}()

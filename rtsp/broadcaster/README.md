@@ -26,12 +26,12 @@ go build -o ./bin/viewer ./cmd/viewer/main.go
 go build -o ./bin/webrtc ./cmd/webRTC/main.go
 ```
 
-## Watcher
+## Video creator
 
-Watch shared memory.
+Watch shared memory, convert frames to video, manage memory.
 
 ```
-go build -o ./bin/watcher ./cmd/watcher/main.go
+go build -o ./bin/video_creator ./cmd/videoCreator/main.go
 ```
 ## Server
 
@@ -39,13 +39,6 @@ Serve frames by swapping image source.
 
 ```
 go build -o ./bin/server ./cmd/server/main.go
-```
-## Converter
-
-Convert frames to video files.
-
-```
-go build -o ./bin/converter ./cmd/converter/main.go
 ```
 
 # Testing

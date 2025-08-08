@@ -10,11 +10,12 @@ RUN go mod download
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -gcflags="-N -l" -a -o ./bin/provider ./cmd/provider/main.go
 
 
-FROM debian:bookworm-slim
+FROM linuxserver/ffmpeg
 WORKDIR /app/
 COPY --from=builder /app/bin/provider ./bin/provider
 COPY --from=builder /go/bin/dlv /
 
 EXPOSE 2345
 
+ENTRYPOINT []
 CMD ["./bin/provider"]

@@ -178,19 +178,3 @@ func (c *Converter) RunUntilComplete() {
 		}
 	}
 }
-
-func StartWorkflow() {
-	converter, _ := NewConverter(SavePath)
-	converter.RunUntilComplete()
-	defer converter.Close()
-	go func() {
-		ticker := time.NewTicker(10 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			if !converter.hasJob {
-				converter.RunUntilComplete()
-			}
-		}
-	}()
-	converter.Watch()
-}
