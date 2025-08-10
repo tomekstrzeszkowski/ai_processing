@@ -21,7 +21,7 @@ def process_frame(frame, detector):
         cv2.putText(
             frame,
             f"Detected {detector.yolo_class_id_to_verbose[type_]}!",
-            (x0+10, y0+20),f
+            (x0+10, y0+20),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.5,
             (0, 255, 0),
@@ -29,9 +29,10 @@ def process_frame(frame, detector):
         )
         detected_objects += 1
     if detected_objects:
+        now_label = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         cv2.putText(
             frame, 
-            f"Objects: {detected_objects}", 
+            f"{now_label} objects: {detected_objects}", 
             (20, 20), 
             cv2.FONT_HERSHEY_SIMPLEX, 
             0.7, 
@@ -43,14 +44,18 @@ def process_frame(frame, detector):
 
 def main():
     url = os.getenv("IP_CAM_URL", "copy .env.template")
+    display_preview = bool(os.getenv("DISPLAY_PREVIEW", ""))
     detector = Detector()
     print(f"Connecting to camera: {url} with AI model")
 
     
     # Create VideoCapture object
     os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "video_codec;h264_cuvid"
-    video = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
-    
+
+    if url.startswith("rtsp"):
+        video = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
+    else:
+        video = cv2.VideoCapture(int(url))
     # Set buffer size to reduce latency
     video.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     video.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 1 * 10_000)
@@ -98,7 +103,8 @@ def main():
             processed_frame, type_ = process_frame(small_frame, detector)
             
             # Display frames
-            cv2.imshow('Processed', processed_frame)
+            if display_preview:
+                cv2.imshow('Processed', processed_frame)
             processed_frame_bgr = cv2.cvtColor(np.array(processed_frame), cv2.COLOR_RGB2BGR)
             success, buffer = cv2.imencode('.jpg', processed_frame_bgr)
             if success:

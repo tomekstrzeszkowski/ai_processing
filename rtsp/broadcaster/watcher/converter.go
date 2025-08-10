@@ -113,7 +113,7 @@ func Convert(chunkPath string) error {
 	args := []string{
 		"-framerate", "30",
 		"-i", inputPattern,
-		"-vf", "scale=1900:1068",
+		"-vf", "scale=1900:1068,fps=fps=30:round=up",
 		"-pix_fmt", "yuv420p",
 		"-c:v", "libx264",
 		"-profile:v", "baseline",

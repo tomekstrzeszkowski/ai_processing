@@ -16,5 +16,6 @@ RUN pip install --upgrade pip \
     && pip install -r requirements.txt
 
 COPY *.py .
+COPY .env .env
 
 CMD ["python"]
