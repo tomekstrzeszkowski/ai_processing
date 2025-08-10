@@ -1,6 +1,7 @@
 package watcher
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"os"
@@ -189,10 +190,7 @@ func TestSaveSignificantFrameForLaterWhenDirIsEmpty(t *testing.T) {
 					t.Error("Expected frame data")
 				}
 				if sf.Before.Size() != 2 {
-					t.Error("Buffer size is incorrectf")
-				}
-				if sf.After != nil {
-					t.Errorf("Buffer size is incorrect %v", sf.After.Size())
+					t.Errorf("Buffer size is incorrect %d", sf.Before.Size())
 				}
 				hasSignificant <- true
 			case <-timeout:
@@ -216,27 +214,34 @@ func TestSaveSignificantFrameForLaterWhenDirIsEmpty(t *testing.T) {
 		hasSignificant := make(chan bool, 1)
 		go func() {
 			select {
-			case fr := <-receiver.Frames:
-				fmt.Printf("FRA %v\n", fr)
+			case <-receiver.Frames:
 			}
 		}()
 		go func() {
 			for {
 				select {
 				case sf := <-receiver.SignificantFrames:
-					called++
-					if called == 2 {
-						if sf.Data == nil {
+					switch {
+					case called == 0:
+						if !bytes.Equal(*sf.Data, data) {
 							t.Error("Expected frame data")
 						}
 						if sf.Before.Size() != 0 {
-							t.Error("Buffer size is incorrectf")
+							t.Error("Buffer size is incorrect")
 						}
-						if sf.After.Size() != 2 {
-							t.Errorf("Buffer size is incorrect %v", sf.After.Size())
+					case called == 1:
+						if bytes.Equal(*sf.Data, data) {
+							t.Error("Expected frame data")
+						}
+						if bytes.Equal(*sf.Data, []byte("nothing 2")) {
+							t.Error("Expected frame data")
+						}
+						if sf.Before != nil {
+							t.Error("Buffer size is incorrect")
 						}
 						hasSignificant <- true
 					}
+					called++
 				case <-timeout:
 					hasSignificant <- false
 				}
@@ -260,27 +265,28 @@ func TestSaveSignificantFrameForLaterWhenDirIsEmpty(t *testing.T) {
 		hasSignificant := make(chan bool, 1)
 		go func() {
 			select {
-			case fr := <-receiver.Frames:
-				fmt.Printf("FRA %v\n", fr)
+			case <-receiver.Frames:
 			}
 		}()
 		go func() {
 			for {
 				select {
 				case sf := <-receiver.SignificantFrames:
-					called++
-					if called == 2 {
-						if sf.Data != nil {
+					switch {
+					case called == 0:
+						if !bytes.Equal(*sf.Data, data) {
+							t.Error("No detection")
+						}
+					case called == 1:
+						if bytes.Equal(*sf.Data, []byte("nothing after 3")) {
 							t.Error("No significant frame is expected")
 						}
-						if sf.Before.Size() != 1 {
+						if sf.Before != nil {
 							t.Errorf("Buffer size is incorrect %v", sf.Before.Size())
-						}
-						if !sf.After.IsFull() {
-							t.Error("Buffer should be full")
 						}
 						hasSignificant <- true
 					}
+					called++
 				case <-timeout:
 					hasSignificant <- false
 				}

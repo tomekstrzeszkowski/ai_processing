@@ -34,7 +34,6 @@ type SignificantFrame struct {
 	Data     *[]byte
 	Detected int
 	Before   *CircularBuffer
-	After    *CircularBuffer
 }
 
 type SharedMemoryReceiver struct {
@@ -108,7 +107,7 @@ func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 	showWhatWasAfter := smr.configProvider.GetShowWhatWasAfter()
 	showWhatWasBefore := smr.configProvider.GetShowWhatWasBefore()
 	before := NewCircularBuffer(showWhatWasBefore)
-	var after *CircularBuffer
+	after := 0
 	var lastFrameData []byte
 	for {
 		select {
@@ -132,25 +131,27 @@ func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 				}
 				lastFrameData = frameData
 
-				log.Printf("New frame received: %d bytes, that was %d", len(frameData), detected)
+				log.Printf("New frame received: %d bytes, that was %d, before %d, after %d", len(frameData), detected, before.Size(), after)
 				smr.Frames <- frameData
 				if detected != -1 {
 					frameSignificant := make([]byte, len(frameData))
 					copy(frameSignificant, frameData)
 					sf := SignificantFrame{
-						Data: &frameSignificant, Detected: detected, Before: before, After: after,
+						Data: &frameSignificant, Detected: detected, Before: before,
 					}
 					go smr.SendSignificantFrame(sf)
-					after = NewCircularBuffer(showWhatWasAfter)
-				} else if after != nil {
-					after.Add(frameData)
-				} else {
+					after = showWhatWasAfter + 1
+				} else if after-1 <= 0 {
 					before.Add(frameData)
 				}
-				if after != nil && after.IsFull() {
-					sf := SignificantFrame{Data: nil, Detected: -1, Before: before, After: after}
-					go smr.SendSignificantFrame(sf)
-					after = nil
+				if after != 0 {
+					after--
+					if detected == -1 {
+						frameAfter := make([]byte, len(frameData))
+						copy(frameAfter, frameData)
+						sf := SignificantFrame{Data: &frameAfter, Detected: -1, Before: nil}
+						go smr.SendSignificantFrame(sf)
+					}
 				}
 			}
 
@@ -172,28 +173,14 @@ func (smr *SharedMemoryReceiver) SaveFrameForLater() {
 		year, month, day := time.Now().Date()
 		path := fmt.Sprintf("%s/%d-%02d-%02d", smr.configProvider.GetSavePath(), year, month, day)
 		i, path := TouchDirAndGetIterator(path, saveChunkSize)
-		if detectedFrame.Data != nil {
-			if detectedFrame.After != nil && detectedFrame.After.Size() > 0 {
-				for _, frameAfter := range detectedFrame.After.GetAll() {
-					SaveFrame(i, frameAfter, path)
-					i += 1
-				}
-				//after will be created again after this method
-				log.Printf("Frames before from previous detection: %d", detectedFrame.After.Size())
-			} else {
-				for _, frameBefore := range detectedFrame.Before.GetAll() {
-					SaveFrame(i, frameBefore, path)
-					i += 1
-				}
-			}
-			SaveFrame(i, *detectedFrame.Data, path)
-			i += 1
-			detectedFrame.Before.Clear()
-		} else {
-			for _, frameAfter := range detectedFrame.After.GetAll() {
-				SaveFrame(i, frameAfter, path)
+		if detectedFrame.Before != nil {
+			for _, frameBefore := range detectedFrame.Before.GetAll() {
+				SaveFrame(i, frameBefore, path)
 				i += 1
 			}
+			detectedFrame.Before.Clear()
 		}
+		SaveFrame(i, *detectedFrame.Data, path)
+		i += 1
 	}
 }
