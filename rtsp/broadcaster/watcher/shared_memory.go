@@ -42,10 +42,12 @@ type SharedMemoryReceiver struct {
 	Frames            chan []byte
 	SignificantFrames chan SignificantFrame
 	configProvider    ConfigProvider
+	savePath          string
 }
 
 func NewSharedMemoryReceiverWithConfig(shmName string, configProvider ConfigProvider) (*SharedMemoryReceiver, error) {
-	if err := os.MkdirAll(configProvider.GetSavePath(), 0755); err != nil {
+	saveFramePath := fmt.Sprintf("%s_video_frame", configProvider.GetSavePath())
+	if err := os.MkdirAll(saveFramePath, 0755); err != nil {
 		panic(fmt.Sprintf("Cannot create directory: %v", err))
 	}
 	watcher, err := fsnotify.NewWatcher()
@@ -59,6 +61,7 @@ func NewSharedMemoryReceiverWithConfig(shmName string, configProvider ConfigProv
 		Frames:            make(chan []byte, 10),
 		SignificantFrames: make(chan SignificantFrame, 100),
 		configProvider:    configProvider,
+		savePath:          saveFramePath,
 	}
 
 	// Watch the shared memory directory
@@ -109,6 +112,9 @@ func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 	before := NewCircularBuffer(showWhatWasBefore)
 	after := 0
 	var lastFrameData []byte
+	startTime := time.Now()
+	frameCount := 0
+	actualFps := 30.0
 	for {
 		select {
 		case event, ok := <-smr.watcher.Events:
@@ -130,8 +136,21 @@ func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 					continue
 				}
 				lastFrameData = frameData
-
-				log.Printf("New frame received: %d bytes, that was %d, before %d, after %d", len(frameData), detected, before.Size(), after)
+				elapsedTime := time.Since(startTime)
+				frameCount++
+				if elapsedTime > time.Second {
+					actualFps = float64(frameCount) / elapsedTime.Seconds()
+					frameCount = 0
+					startTime = time.Now()
+				}
+				log.Printf(
+					"[FPS %f] New frame received: %d bytes, that was %d, before %d, after %d",
+					actualFps,
+					len(frameData),
+					detected,
+					before.Size(),
+					after,
+				)
 				smr.Frames <- frameData
 				if detected != -1 {
 					frameSignificant := make([]byte, len(frameData))
@@ -171,7 +190,7 @@ func (smr *SharedMemoryReceiver) Close() {
 func (smr *SharedMemoryReceiver) SaveFrameForLater() {
 	for detectedFrame := range smr.SignificantFrames {
 		year, month, day := time.Now().Date()
-		path := fmt.Sprintf("%s/%d-%02d-%02d", smr.configProvider.GetSavePath(), year, month, day)
+		path := fmt.Sprintf("%s/%d-%02d-%02d", smr.savePath, year, month, day)
 		i, path := TouchDirAndGetIterator(path, saveChunkSize)
 		if detectedFrame.Before != nil {
 			for _, frameBefore := range detectedFrame.Before.GetAll() {

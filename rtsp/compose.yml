@@ -7,7 +7,7 @@ services:
       - 2345:2345
     volumes:
       - shared_memory:/dev/shm
-      - ./broadcaster/saved:/app/saved
+      - ./broadcaster/saved_video_frame:/app/saved_video_frame
     shm_size: 256m
     tmpfs:
       - /shared:size=256m
@@ -55,7 +55,7 @@ services:
       context: ./broadcaster/
       dockerfile: ./docker/DockerfileMisc
     volumes:
-      - ./broadcaster/saved:/app/saved
+      - ./broadcaster/saved_video_frame:/app/saved_video_frame
     command: "./bin/watcher"
     ports:
       - 8072:8072

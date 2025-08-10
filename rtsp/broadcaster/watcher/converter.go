@@ -20,22 +20,22 @@ type Converter struct {
 	mux          sync.RWMutex
 }
 
-func NewConverter(savePath string) (*Converter, error) {
+func NewConverter(saveVideoPath string) (*Converter, error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
 	}
 	c := &Converter{
-		savePath:     savePath,
+		savePath:     saveVideoPath,
 		watcher:      watcher,
 		hasJob:       false,
-		watchingDirs: []string{savePath},
+		watchingDirs: []string{saveVideoPath},
 	}
-	c.AddToWatch(savePath)
-	dateDirs, _ := GetDateDirNames(savePath, []string{})
+	c.AddToWatch(saveVideoPath)
+	dateDirs, _ := GetDateDirNames(saveVideoPath, []string{})
 	fmt.Printf("Watching directories: %v\n", dateDirs)
 	for _, dateDir := range dateDirs {
-		c.AddToWatch(filepath.Join(savePath, dateDir))
+		c.AddToWatch(filepath.Join(saveVideoPath, dateDir))
 	}
 	return c, nil
 }
@@ -54,9 +54,9 @@ func (c *Converter) Watch() {
 					if !c.hasJob {
 						skipDates := c.GetSkipDates()
 						for {
-							RemoveOldestDirs(SavePath, skipDates)
-							RemoveOldestVideoFiles(SavePath, skipDates)
-							c.hasJob = ConvertLastChunkToVideo(SavePath)
+							RemoveOldestDirs(c.savePath, skipDates)
+							RemoveOldestVideoFiles(c.savePath, skipDates)
+							c.hasJob = ConvertLastChunkToVideo(c.savePath)
 							if !c.hasJob {
 								break
 							}
@@ -170,9 +170,9 @@ func (c *Converter) RunUntilComplete() {
 	c.mux.Lock()
 	defer c.mux.Unlock()
 	for {
-		RemoveOldestDirs(SavePath, skipDates)
-		RemoveOldestVideoFiles(SavePath, skipDates)
-		c.hasJob = ConvertLastChunkToVideo(SavePath)
+		RemoveOldestDirs(c.savePath, skipDates)
+		RemoveOldestVideoFiles(c.savePath, skipDates)
+		c.hasJob = ConvertLastChunkToVideo(c.savePath)
 		if !c.hasJob {
 			break
 		}
