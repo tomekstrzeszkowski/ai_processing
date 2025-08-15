@@ -31,7 +31,7 @@ func (d DefaultConfigProvider) GetShowWhatWasAfter() int {
 }
 
 type SignificantFrame struct {
-	Data     *[]byte
+	Data     []byte
 	Detected int
 	Before   *CircularBuffer
 }
@@ -105,6 +105,16 @@ func (smr *SharedMemoryReceiver) SendSignificantFrame(sf SignificantFrame) {
 		log.Printf("Timeout sending significant frame")
 	}
 }
+func (smr *SharedMemoryReceiver) logStats(actualFps float64, frameLength int, detected int, beforeSize int, after int) {
+	log.Printf(
+		"[FPS %f] New frame received: %d bytes, that was %d, before %d, after %d",
+		actualFps,
+		frameLength,
+		detected,
+		beforeSize,
+		after,
+	)
+}
 func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 	log.Println("Starting shared memory watcher...")
 	showWhatWasAfter := smr.configProvider.GetShowWhatWasAfter()
@@ -143,20 +153,11 @@ func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 					frameCount = 0
 					startTime = time.Now()
 				}
-				log.Printf(
-					"[FPS %f] New frame received: %d bytes, that was %d, before %d, after %d",
-					actualFps,
-					len(frameData),
-					detected,
-					before.Size(),
-					after,
-				)
+				smr.logStats(actualFps, len(frameData), detected, before.Size(), after)
 				smr.Frames <- frameData
 				if detected != -1 {
-					frameSignificant := make([]byte, len(frameData))
-					copy(frameSignificant, frameData)
 					sf := SignificantFrame{
-						Data: &frameSignificant, Detected: detected, Before: before,
+						Data: frameData, Detected: detected, Before: before,
 					}
 					go smr.SendSignificantFrame(sf)
 					after = showWhatWasAfter + 1
@@ -166,9 +167,7 @@ func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 				if after != 0 {
 					after--
 					if detected == -1 {
-						frameAfter := make([]byte, len(frameData))
-						copy(frameAfter, frameData)
-						sf := SignificantFrame{Data: &frameAfter, Detected: -1, Before: nil}
+						sf := SignificantFrame{Data: frameData, Detected: -1, Before: nil}
 						go smr.SendSignificantFrame(sf)
 					}
 				}
@@ -199,7 +198,7 @@ func (smr *SharedMemoryReceiver) SaveFrameForLater() {
 			}
 			detectedFrame.Before.Clear()
 		}
-		SaveFrame(i, *detectedFrame.Data, path)
+		SaveFrame(i, detectedFrame.Data, path)
 		i += 1
 	}
 }

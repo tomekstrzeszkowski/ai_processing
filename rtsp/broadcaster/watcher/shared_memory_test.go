@@ -223,17 +223,17 @@ func TestSaveSignificantFrameForLaterWhenDirIsEmpty(t *testing.T) {
 				case sf := <-receiver.SignificantFrames:
 					switch {
 					case called == 0:
-						if !bytes.Equal(*sf.Data, data) {
+						if !bytes.Equal(sf.Data, data) {
 							t.Error("Expected frame data")
 						}
 						if sf.Before.Size() != 0 {
 							t.Error("Buffer size is incorrect")
 						}
 					case called == 1:
-						if bytes.Equal(*sf.Data, data) {
+						if bytes.Equal(sf.Data, data) {
 							t.Error("Expected frame data")
 						}
-						if bytes.Equal(*sf.Data, []byte("nothing 2")) {
+						if bytes.Equal(sf.Data, []byte("nothing 2")) {
 							t.Error("Expected frame data")
 						}
 						if sf.Before != nil {
@@ -274,11 +274,11 @@ func TestSaveSignificantFrameForLaterWhenDirIsEmpty(t *testing.T) {
 				case sf := <-receiver.SignificantFrames:
 					switch {
 					case called == 0:
-						if !bytes.Equal(*sf.Data, data) {
+						if !bytes.Equal(sf.Data, data) {
 							t.Error("No detection")
 						}
 					case called == 1:
-						if bytes.Equal(*sf.Data, []byte("nothing after 3")) {
+						if bytes.Equal(sf.Data, []byte("nothing after 3")) {
 							t.Error("No significant frame is expected")
 						}
 						if sf.Before != nil {
