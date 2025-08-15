@@ -17,7 +17,7 @@ func main() {
 	defer creator.Close()
 	go creator.StartWatchingFrames()
 	go creator.SaveFramesForLater()
-	go creator.StartConversionWorkflow()
+	go creator.StartConversionWorkflow(&memory.ActualFps)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

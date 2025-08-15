@@ -13,7 +13,7 @@ func main() {
 	defer creator.Close()
 	go creator.StartWatchingFrames()
 	go creator.SaveFramesForLater()
-	go creator.StartConversionWorkflow()
+	go creator.StartConversionWorkflow(&memory.ActualFps)
 
 	server, _ := watcher.NewServer(8072)
 	server.PrepareEndpoints()

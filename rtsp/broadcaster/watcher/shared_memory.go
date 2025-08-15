@@ -43,6 +43,7 @@ type SharedMemoryReceiver struct {
 	SignificantFrames chan SignificantFrame
 	configProvider    ConfigProvider
 	savePath          string
+	ActualFps         float64
 }
 
 func NewSharedMemoryReceiverWithConfig(shmName string, configProvider ConfigProvider) (*SharedMemoryReceiver, error) {
@@ -62,6 +63,7 @@ func NewSharedMemoryReceiverWithConfig(shmName string, configProvider ConfigProv
 		SignificantFrames: make(chan SignificantFrame, 100),
 		configProvider:    configProvider,
 		savePath:          saveFramePath,
+		ActualFps:         30,
 	}
 
 	// Watch the shared memory directory
@@ -124,7 +126,6 @@ func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 	var lastFrameData []byte
 	startTime := time.Now()
 	frameCount := 0
-	actualFps := 30.0
 	for {
 		select {
 		case event, ok := <-smr.watcher.Events:
@@ -149,11 +150,11 @@ func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 				elapsedTime := time.Since(startTime)
 				frameCount++
 				if elapsedTime > time.Second {
-					actualFps = float64(frameCount) / elapsedTime.Seconds()
+					smr.ActualFps = float64(frameCount) / elapsedTime.Seconds()
 					frameCount = 0
 					startTime = time.Now()
 				}
-				smr.logStats(actualFps, len(frameData), detected, before.Size(), after)
+				smr.logStats(smr.ActualFps, len(frameData), detected, before.Size(), after)
 				smr.Frames <- frameData
 				if detected != -1 {
 					sf := SignificantFrame{

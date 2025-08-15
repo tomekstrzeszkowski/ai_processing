@@ -2,6 +2,7 @@ package watcher
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +19,7 @@ type Converter struct {
 	hasJob       bool
 	watchingDirs []string
 	mux          sync.RWMutex
+	Framerate    *float64
 }
 
 func NewConverter(saveVideoPath string) (*Converter, error) {
@@ -25,11 +27,13 @@ func NewConverter(saveVideoPath string) (*Converter, error) {
 	if err != nil {
 		return nil, err
 	}
+	frameRate := 30.0
 	c := &Converter{
 		savePath:     saveVideoPath,
 		watcher:      watcher,
 		hasJob:       false,
 		watchingDirs: []string{saveVideoPath},
+		Framerate:    &frameRate,
 	}
 	c.AddToWatch(saveVideoPath)
 	dateDirs, _ := GetDateDirNames(saveVideoPath, []string{})
@@ -56,7 +60,7 @@ func (c *Converter) Watch() {
 						for {
 							RemoveOldestDirs(c.savePath, skipDates)
 							RemoveOldestVideoFiles(c.savePath, skipDates)
-							c.hasJob = ConvertLastChunkToVideo(c.savePath)
+							c.hasJob = c.convertLastChunkToVideo(c.savePath)
 							if !c.hasJob {
 								break
 							}
@@ -101,17 +105,16 @@ func RemoveOldestVideoFiles(savePath string, skipDates []string) {
 	}
 }
 
-func Convert(chunkPath string) error {
+func (c *Converter) convert(chunkPath string) error {
 	patches := strings.Split(chunkPath, "/")
 	inputPattern := filepath.Join(chunkPath, "frame%d.jpg")
 	dateDirName, chunkDirName := patches[len(patches)-2], patches[len(patches)-1]
-	fmt.Printf("Converting frames in %s %v to video...\n", dateDirName, patches)
+	fmt.Printf("[FPS:%f] Converting frames in %s %v\n", *c.Framerate, dateDirName, patches)
 	outputPath := filepath.Join(append(patches[:len(patches)-2], fmt.Sprintf("%s-%s.mp4", dateDirName, chunkDirName))...)
-	fmt.Println("Output path:", outputPath)
 
 	// FFmpeg command arguments
 	args := []string{
-		"-framerate", "30",
+		"-framerate", fmt.Sprintf("%d", int(math.Ceil(*c.Framerate))),
 		"-i", inputPattern,
 		"-vf", "scale=1900:1068,fps=fps=30:round=up",
 		"-pix_fmt", "yuv420p",
@@ -135,7 +138,7 @@ func Convert(chunkPath string) error {
 	return nil
 }
 
-func ConvertLastChunkToVideo(savePath string) bool {
+func (c *Converter) convertLastChunkToVideo(savePath string) bool {
 	dirCount := CountChunksInDateDir(savePath, []string{})
 	fmt.Printf("Number of chunks in date dir: %d\n", dirCount)
 	chunkPath := GetOldestChunkInDateDir(savePath, []string{})
@@ -157,7 +160,7 @@ func ConvertLastChunkToVideo(savePath string) bool {
 		fmt.Println("There is only one chunk that can be busy.")
 		return false
 	}
-	Convert(chunkPath)
+	c.convert(chunkPath)
 	err := os.RemoveAll(chunkPath)
 	if err != nil {
 		panic(fmt.Sprintf("Error removing chunk directory: %v\n", err))
@@ -172,7 +175,7 @@ func (c *Converter) RunUntilComplete() {
 	for {
 		RemoveOldestDirs(c.savePath, skipDates)
 		RemoveOldestVideoFiles(c.savePath, skipDates)
-		c.hasJob = ConvertLastChunkToVideo(c.savePath)
+		c.hasJob = c.convertLastChunkToVideo(c.savePath)
 		if !c.hasJob {
 			break
 		}
