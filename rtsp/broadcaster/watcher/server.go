@@ -9,18 +9,28 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"strzcam.com/broadcaster/video"
 )
 
 type connInfo struct {
 	conn     *websocket.Conn
 	writeMux sync.Mutex
 }
+type Command int8
+
+const (
+	Idle Command = iota
+	GetVideoList
+	GetVideo
+)
 
 type Server struct {
-	clients    map[*connInfo]bool
-	clientsMux sync.RWMutex
-	upgrader   websocket.Upgrader
-	port       uint16
+	clients           map[*connInfo]bool
+	clientsMux        sync.RWMutex
+	upgrader          websocket.Upgrader
+	port              uint16
+	WaitingForCommand Command
+	VideoList         chan video.Video
 }
 
 func NewServer(port uint16) (*Server, error) {
@@ -29,7 +39,8 @@ func NewServer(port uint16) (*Server, error) {
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
-		port: port,
+		port:              port,
+		WaitingForCommand: Idle,
 	}
 	return receiver, nil
 }
@@ -131,6 +142,27 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(status)
 }
 
+func IsChannelClosed(ch chan video.Video) bool {
+	select {
+	case <-ch:
+		return true
+	default:
+		return false
+	}
+}
+func (s *Server) getVideoList(w http.ResponseWriter, r *http.Request) {
+	s.setCORSHeaders(w)
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+	s.VideoList = make(chan video.Video, 100)
+	s.WaitingForCommand = GetVideoList
+	var videoList []video.Video
+	for video := range s.VideoList {
+		videoList = append(videoList, video)
+	}
+	json.NewEncoder(w).Encode(videoList)
+}
+
 // Add CORS headers to response
 func (s *Server) setCORSHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -142,6 +174,8 @@ func (s *Server) PrepareEndpoints() {
 	// Setup HTTP handlers
 	http.HandleFunc("/ws", s.handleWebSocket)
 	http.HandleFunc("/status", s.handleStatus)
+	http.HandleFunc("/video-list", s.getVideoList)
+	// http.HandleFunc("/video/{name}", todo)
 
 	// Serve static files for testing
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

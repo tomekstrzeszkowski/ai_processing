@@ -12,18 +12,16 @@ import {
   View
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { useWebSocket } from '../websocketProvider';
 
 const { width, height } = Dimensions.get('window');
 
 const App = () => {
   const [isConnected, setIsConnected] = useState(false);
-  const [frameData, setFrameData] = useState(null);
+  const [, setFrameData] = useState(null);
   const [lastFrameTime, setLastFrameTime] = useState(null);
-  const [serverUrl, ] = useState('ws://localhost:8080/ws');
   const [clientCount, setClientCount] = useState(0);
-  const [isConnecting, setIsConnecting] = useState(false);
   const [imageUri, setImageUri] = useState(null);
-  const wsRef = useRef(null);
   const frameCountRef = useRef(0);
 
   const showAlert = (title, message) => {
@@ -33,7 +31,10 @@ const App = () => {
       Alert.alert(title, message);
     }
   };
-
+  const {
+    wsRef, isConnecting, setIsConnecting, serverUrl, httpServerUrl
+  } = useWebSocket();
+  
   const connect = () => {
     if (isConnecting || isConnected) return;
     
@@ -99,11 +100,7 @@ const App = () => {
 
   const fetchStatus = async () => {
     try {
-      const httpUrl = serverUrl.replace('ws://', 'http://').replace('wss://', 'https://').replace('/ws', '/status');
-      const finalUrl = Platform.OS === 'web' && httpUrl.includes('localhost')
-        ? httpUrl.replace('localhost', window.location.hostname)
-        : httpUrl;
-      
+      const finalUrl = `${httpServerUrl}/status`;
       const response = await fetch(finalUrl, {
         method: 'GET',
         headers: {

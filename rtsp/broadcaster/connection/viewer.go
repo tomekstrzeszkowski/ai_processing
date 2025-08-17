@@ -3,6 +3,7 @@ package connection
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
+	"strzcam.com/broadcaster/video"
 )
 
 type Viewer struct {
@@ -75,6 +77,7 @@ func (v *Viewer) GetData() (*time.Time, []byte) {
 
 	return &timestamp, data[8:]
 }
+
 func (v *Viewer) isTimestampHealthy(ts *time.Time) bool {
 	if ts == nil {
 		return false
@@ -92,4 +95,26 @@ func (v *Viewer) GetFrames() ([][]byte, error) {
 	v.lastFramePacket = ts
 	frames, _ := splitJPEGFrames(dataFrames)
 	return frames, nil
+}
+func (v *Viewer) GetVideoList(start time.Time, end time.Time) []video.Video {
+	stream, err := (*v.Host).NewStream(context.Background(), (*v.Info).ID, "/get-video-list/1.0.0")
+	if err != nil {
+		log.Println(err)
+		return []video.Video{}
+	}
+	defer stream.Close()
+	//TODO: get date range from frontend
+	stream.Write([]byte("2025-08-07-2025-12-01\n"))
+	data, err := io.ReadAll(stream)
+	if err != nil {
+		log.Printf("Error reading stream: %v", err)
+		return []video.Video{}
+	}
+	var videoList []video.Video
+	err = json.Unmarshal(data, &videoList)
+	return videoList
+}
+
+func (v *Viewer) GetVideo(name string) {
+
 }

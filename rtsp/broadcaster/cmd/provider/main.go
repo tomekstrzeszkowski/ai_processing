@@ -11,8 +11,9 @@ import (
 
 func main() {
 	// Create a key from the rendezvous string
+	savePath := fmt.Sprintf("%s_video_frame", watcher.SavePath)
 	memory, _ := watcher.NewSharedMemoryReceiver("video_frame")
-	converter, _ := watcher.NewConverter(fmt.Sprintf("%s_video_frame", watcher.SavePath))
+	converter, _ := watcher.NewConverter(savePath)
 	creator, _ := watcher.NewVideoCreator(memory, converter)
 	defer creator.Close()
 	go creator.StartWatchingFrames()
@@ -28,7 +29,7 @@ func main() {
 	defer host.Close()
 	defer kademliaDHT.Close()
 
-	Provider := connection.NewProvider(host)
+	Provider := connection.NewProvider(host, savePath)
 	Provider.StartListening(ctx)
 	Provider.HandleConnectedPeers()
 	connection.AnnounceDHT(ctx, kademliaDHT, connection.RendezVous)

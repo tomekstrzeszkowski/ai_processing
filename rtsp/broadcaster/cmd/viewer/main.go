@@ -56,6 +56,17 @@ func main() {
 					log.Printf("Broadcasting frames: %d\n", frameCount)
 					server.BroadcastFramesAdaptative(frames)
 				}
+				switch server.WaitingForCommand {
+				case watcher.GetVideoList:
+					videoList := viewer.GetVideoList(time.Now(), time.Now())
+					if !watcher.IsChannelClosed(server.VideoList) {
+						for _, video := range videoList {
+							server.VideoList <- video
+						}
+						close(server.VideoList)
+					}
+					server.WaitingForCommand = watcher.Idle
+				}
 			}
 		}
 	}
