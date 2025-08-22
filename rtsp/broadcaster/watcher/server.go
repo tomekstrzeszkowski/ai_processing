@@ -1,14 +1,17 @@
 package watcher
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"strzcam.com/broadcaster/connection"
 	"strzcam.com/broadcaster/video"
 )
 
@@ -25,14 +28,11 @@ const (
 )
 
 type Server struct {
-	clients           map[*connInfo]bool
-	clientsMux        sync.RWMutex
-	upgrader          websocket.Upgrader
-	port              uint16
-	WaitingForCommand Command
-	VideoList         chan video.Video
-	VideoName         string
-	VideoData         chan []byte
+	clients    map[*connInfo]bool
+	clientsMux sync.RWMutex
+	upgrader   websocket.Upgrader
+	port       uint16
+	Viewers    []*connection.Viewer
 }
 
 func NewServer(port uint16) (*Server, error) {
@@ -41,9 +41,7 @@ func NewServer(port uint16) (*Server, error) {
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
-		port:              port,
-		WaitingForCommand: Idle,
-		VideoName:         "",
+		port: port,
 	}
 	return receiver, nil
 }
@@ -144,47 +142,54 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(status)
 }
-
-func IsChannelClosed(ch chan video.Video) bool {
-	select {
-	case <-ch:
-		return true
-	default:
-		return false
+func (s *Server) AddViewer(v *connection.Viewer) {
+	for _, existingViewer := range s.Viewers {
+		if existingViewer.ID == v.ID {
+			return
+		}
 	}
+	s.Viewers = append(s.Viewers, v)
 }
-func IsVideoChannelClosed(ch chan []byte) bool {
-	select {
-	case <-ch:
-		return true
-	default:
-		return false
+func (s *Server) GetViewer() *connection.Viewer {
+	if len(s.Viewers) > 0 {
+		return s.Viewers[0]
 	}
+	return nil
 }
 func (s *Server) getVideo(w http.ResponseWriter, r *http.Request) {
 	s.setCORSHeaders(w)
+	videoName := r.PathValue("name")
+	viewer := s.GetViewer()
+	videoData := viewer.GetVideo(videoName)
+	w.Header().Set("Content-Type", "video/mp4")
+	w.Header().Set("Content-Disposition", "inline")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	reader := bytes.NewReader(videoData)
 	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", "application/json")
-	s.VideoData = make(chan []byte, 1)
-	s.VideoName = r.PathValue("name")
-	s.WaitingForCommand = GetVideo
-	var videoData []byte
-	for receivedVideoData := range s.VideoData {
-		videoData = receivedVideoData
+	_, err := io.Copy(w, reader)
+	if err != nil {
+		log.Printf("Error streaming video: %v", err)
+		// Note: Can't write error header here as we've already written the success header
+		return
 	}
-	json.NewEncoder(w).Encode(videoData)
 }
 func (s *Server) getVideoList(w http.ResponseWriter, r *http.Request) {
-	//TODO: maybe it's better to send it via ws (same as BroadcastFrame)
 	s.setCORSHeaders(w)
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
-	s.VideoList = make(chan video.Video, 100)
-	s.WaitingForCommand = GetVideoList
-	var videoList []video.Video
-	for video := range s.VideoList {
-		videoList = append(videoList, video)
+	startParam := r.URL.Query().Get("start")
+	endParam := r.URL.Query().Get("end")
+	if startParam == "" {
+		startParam = "2011-11-10"
 	}
+	if endParam == "" {
+		endParam = "2011-11-11"
+	}
+	start, _ := time.Parse("2006-01-02", startParam)
+	end, _ := time.Parse("2006-01-02", endParam)
+	var videoList []video.Video
+	viewer := s.GetViewer()
+	videoList = viewer.GetVideoList(start, end)
 	json.NewEncoder(w).Encode(videoList)
 }
 

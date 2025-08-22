@@ -122,6 +122,9 @@ func (c *Converter) convert(chunkPath string) error {
 		"-profile:v", "baseline",
 		"-level", "3.1",
 		"-bf", "0",
+		"-g", "30", // GOP size = framerate for better seeking
+		"-keyint_min", "30", // Minimum GOP size
+		"-sc_threshold", "0",
 		"-f", "h264",
 		outputPath,
 	}

@@ -38,6 +38,7 @@ func main() {
 		if viewer == nil {
 			continue
 		}
+		server.AddViewer(viewer)
 		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
 		for {
@@ -55,24 +56,6 @@ func main() {
 				if frameCount > 0 {
 					log.Printf("Broadcasting frames: %d\n", frameCount)
 					server.BroadcastFramesAdaptative(frames)
-				}
-				switch server.WaitingForCommand {
-				case watcher.GetVideo:
-					video := viewer.GetVideo(server.VideoName)
-					if !watcher.IsVideoChannelClosed(server.VideoData) {
-						server.VideoData <- video
-						close(server.VideoData)
-					}
-					server.WaitingForCommand = watcher.Idle
-				case watcher.GetVideoList:
-					videoList := viewer.GetVideoList(time.Now(), time.Now())
-					if !watcher.IsChannelClosed(server.VideoList) {
-						for _, video := range videoList {
-							server.VideoList <- video
-						}
-						close(server.VideoList)
-					}
-					server.WaitingForCommand = watcher.Idle
 				}
 			}
 		}

@@ -1,5 +1,7 @@
+import { VideoPlayer } from '@/components/VideoPlayer';
 import { useFocusEffect } from '@react-navigation/native';
-import React, { useCallback, useState } from 'react';
+// No external converter needed
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Button,
   Dimensions,
@@ -17,10 +19,42 @@ const ITEM_WIDTH = (width - (ITEM_MARGIN * (ITEMS_PER_ROW + 1))) / ITEMS_PER_ROW
 export default () => {
   const { httpServerUrl } = useWebSocket();
   const [items, setItems] = useState([]);
-  
-  const fetchVideoList = async () => {
+  const [videoData, setVideoData] = useState("");
+  const [videoName, setVideoName] = useState("");
+
+  // Cleanup MediaSource and blob URLs when component unmounts or video changes
+  useEffect(() => {
+    return () => {
+      if (videoData && videoData.startsWith('blob:')) {
+        const url = videoData;
+        // Give time for the video element to release the MediaSource
+        setTimeout(() => {
+          try {
+            URL.revokeObjectURL(url);
+          } catch (e) {
+            console.warn('Error revoking URL:', e);
+          }
+        }, 100);
+      }
+    };
+  }, [videoData]);
+
+  const [startDate, setStartDate] = useState(() => {
+    const before = new Date();
+    before.setDate(before.getDate() - 7);
+    return before.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const onChangeDateRange = (startDate: string, endDate: string) => {
+    setStartDate(startDate);
+    setEndDate(endDate);
+
+    fetchVideoList(startDate, endDate);
+  }
+  const fetchVideoList = async (startDate: string, endDate: string) => {
+    setItems([]);
     try {
-      const finalUrl = `${httpServerUrl}/video-list`;
+      const finalUrl = `${httpServerUrl}/video-list?start=${startDate}&end=${endDate}`;
       const response = await fetch(finalUrl, {
         method: 'GET',
         headers: {
@@ -36,21 +70,50 @@ export default () => {
       console.error('Error fetching status:', error);
     }
   };
-
+  const fetchVideo = async (name: string) => {
+    setVideoData("");
+    setVideoName("");
+    try {
+      const url = `${httpServerUrl}/video/${name}`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'video/mp4,video/*'
+        },
+      });
+      
+      if (response.ok) {
+        try {
+          // Get video data as ArrayBuffer
+          const buffer = await response.arrayBuffer();
+          console.log('Received video data, size:', buffer.byteLength);
+          
+          const bytes = new Uint8Array(buffer);
+          const videoUrl = URL.createObjectURL(new Blob([bytes], { type: 'video/mp4' }));
+          console.log('Created video URL:', videoUrl);
+          setVideoData(videoUrl);
+          setVideoName(name);
+        } catch (error) {
+          console.error('Error converting video:', error);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching video:', error);
+    }
+  };
   useFocusEffect(
     useCallback(() => {
-      fetchVideoList();
+      fetchVideoList(startDate, endDate);
     }, [httpServerUrl])
   );
 
-  const renderVideoItem = (item, index) => (
+  const renderVideoItem = (item: any, index: number) => (
     <View key={index} style={styles.gridItem}>
       <Button 
         title={`${item.Name} (${item.Size ?? "-"})`}
         color="#007AFF"
         onPress={() => {
-          // Add your button press handler here
-          console.log('Selected:', item.Name);
+          fetchVideo(item.Name);
         }}
       />
     </View>
@@ -59,6 +122,26 @@ export default () => {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
+        <View>
+          <div className="p-4">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => onChangeDateRange(e.target.value, endDate)}
+              className="mr-2 p-2 border rounded"
+            />
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => onChangeDateRange(startDate, e.target.value)}
+              min={startDate}
+              className="p-2 border rounded"
+            />
+          </div>
+        </View>
+        <View>
+          {videoData ? <VideoPlayer videoUrl={videoData} /> : <div>No video selected</div>}
+        </View>
         <View style={styles.gridContainer}>
           {items.map((item, index) => renderVideoItem(item, index))}
         </View>

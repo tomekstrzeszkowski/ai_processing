@@ -104,7 +104,8 @@ func (v *Viewer) GetVideoList(start time.Time, end time.Time) []video.Video {
 	}
 	defer stream.Close()
 	//TODO: get date range from frontend
-	stream.Write([]byte("2025-08-07-2025-12-01\n"))
+	dateRange := fmt.Sprintf("%s-%s", start.Format("2006-01-02"), end.Format("2006-01-02"))
+	stream.Write([]byte(dateRange + "\n"))
 	data, err := io.ReadAll(stream)
 	if err != nil {
 		log.Printf("Error reading stream: %v", err)
