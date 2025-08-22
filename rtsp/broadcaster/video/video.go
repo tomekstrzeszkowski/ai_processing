@@ -8,11 +8,38 @@ import (
 	"sort"
 	"syscall"
 	"time"
+
+	"bufio"
+	"io"
+	"log"
+	"strconv"
+	"strings"
+
+	"github.com/libp2p/go-libp2p/core/network"
 )
 
 type Video struct {
 	Name string
 	Size int64
+}
+
+func GetVideoByPath(path string) ([]byte, error) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, fmt.Errorf("path does not exist: %s", path)
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("error opening file: %v", err)
+	}
+	defer file.Close()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("error reading file: %v", err)
+	}
+
+	return data, nil
 }
 
 func GetVideoByDateRange(path string, start time.Time, end time.Time) ([]Video, error) {
@@ -69,4 +96,143 @@ func GetVideoByDateRange(path string, start time.Time, end time.Time) ([]Video, 
 	})
 
 	return videoList, nil
+}
+
+// Stream file directly from disk to network without loading into memory
+func StreamFileToNetwork(stream network.Stream, filePath string) error {
+	// Open file
+	file, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	// Get file info for size
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("failed to get file info: %w", err)
+	}
+	sizeHeader := fmt.Sprintf("%d\n", fileInfo.Size())
+	if _, err := stream.Write([]byte(sizeHeader)); err != nil {
+		return fmt.Errorf("failed to write size header: %w", err)
+	}
+
+	// Stream file in chunks
+	const chunkSize = 64 * 1024 // 64KB chunks
+	buffer := make([]byte, chunkSize)
+
+	for {
+		n, err := file.Read(buffer)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("failed to read file chunk: %w", err)
+		}
+
+		if _, err := stream.Write(buffer[:n]); err != nil {
+			return fmt.Errorf("failed to write chunk to stream: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// Client side: receiving large files
+func ReceiveVideoFile(stream network.Stream, outputPath string) error {
+	defer stream.Close()
+
+	// Read file size header
+	buf := bufio.NewReader(stream)
+	sizeStr, err := buf.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read size header: %w", err)
+	}
+
+	fileSize, err := strconv.ParseInt(strings.TrimSpace(sizeStr), 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid size header: %w", err)
+	}
+
+	// Create output file
+	outFile, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create output file: %w", err)
+	}
+	defer outFile.Close()
+
+	// Copy data from stream to file
+	written, err := io.CopyN(outFile, buf, fileSize)
+	if err != nil {
+		return fmt.Errorf("failed to copy data: %w", err)
+	}
+
+	if written != fileSize {
+		return fmt.Errorf("incomplete transfer: got %d bytes, expected %d", written, fileSize)
+	}
+
+	return nil
+}
+
+func ValidateFilename(filename string) error {
+	cleaned := filepath.Clean(filename)
+	if strings.Contains(cleaned, "..") || filepath.IsAbs(cleaned) {
+		return fmt.Errorf("invalid filename: path traversal detected")
+	}
+	if cleaned == "" || cleaned == "." {
+		return fmt.Errorf("invalid filename: empty or current directory")
+	}
+
+	return nil
+}
+
+// Optional: Progress tracking for large files
+func StreamFileWithProgress(stream network.Stream, filePath string) error {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("failed to get file info: %w", err)
+	}
+
+	fileSize := fileInfo.Size()
+
+	// Send size header
+	sizeHeader := fmt.Sprintf("%d\n", fileSize)
+	if _, err := stream.Write([]byte(sizeHeader)); err != nil {
+		return fmt.Errorf("failed to write size header: %w", err)
+	}
+
+	// Progress tracking
+	var totalSent int64
+	const chunkSize = 64 * 1024
+	buffer := make([]byte, chunkSize)
+
+	for {
+		n, err := file.Read(buffer)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("failed to read file chunk: %w", err)
+		}
+
+		if _, err := stream.Write(buffer[:n]); err != nil {
+			return fmt.Errorf("failed to write chunk to stream: %w", err)
+		}
+
+		totalSent += int64(n)
+
+		// Log progress (every 100MB for large files)
+		if totalSent%(100*1024*1024) == 0 || totalSent == fileSize {
+			progress := float64(totalSent) / float64(fileSize) * 100
+			log.Printf("Progress: %.1f%% (%d/%d bytes)", progress, totalSent, fileSize)
+		}
+	}
+
+	return nil
 }

@@ -57,6 +57,13 @@ func main() {
 					server.BroadcastFramesAdaptative(frames)
 				}
 				switch server.WaitingForCommand {
+				case watcher.GetVideo:
+					video := viewer.GetVideo(server.VideoName)
+					if !watcher.IsVideoChannelClosed(server.VideoData) {
+						server.VideoData <- video
+						close(server.VideoData)
+					}
+					server.WaitingForCommand = watcher.Idle
 				case watcher.GetVideoList:
 					videoList := viewer.GetVideoList(time.Now(), time.Now())
 					if !watcher.IsChannelClosed(server.VideoList) {

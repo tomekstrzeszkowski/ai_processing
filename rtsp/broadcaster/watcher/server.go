@@ -31,6 +31,8 @@ type Server struct {
 	port              uint16
 	WaitingForCommand Command
 	VideoList         chan video.Video
+	VideoName         string
+	VideoData         chan []byte
 }
 
 func NewServer(port uint16) (*Server, error) {
@@ -41,6 +43,7 @@ func NewServer(port uint16) (*Server, error) {
 		},
 		port:              port,
 		WaitingForCommand: Idle,
+		VideoName:         "",
 	}
 	return receiver, nil
 }
@@ -150,7 +153,29 @@ func IsChannelClosed(ch chan video.Video) bool {
 		return false
 	}
 }
+func IsVideoChannelClosed(ch chan []byte) bool {
+	select {
+	case <-ch:
+		return true
+	default:
+		return false
+	}
+}
+func (s *Server) getVideo(w http.ResponseWriter, r *http.Request) {
+	s.setCORSHeaders(w)
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+	s.VideoData = make(chan []byte, 1)
+	s.VideoName = r.PathValue("name")
+	s.WaitingForCommand = GetVideo
+	var videoData []byte
+	for receivedVideoData := range s.VideoData {
+		videoData = receivedVideoData
+	}
+	json.NewEncoder(w).Encode(videoData)
+}
 func (s *Server) getVideoList(w http.ResponseWriter, r *http.Request) {
+	//TODO: maybe it's better to send it via ws (same as BroadcastFrame)
 	s.setCORSHeaders(w)
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
@@ -175,7 +200,7 @@ func (s *Server) PrepareEndpoints() {
 	http.HandleFunc("/ws", s.handleWebSocket)
 	http.HandleFunc("/status", s.handleStatus)
 	http.HandleFunc("/video-list", s.getVideoList)
-	// http.HandleFunc("/video/{name}", todo)
+	http.HandleFunc("/video/{name}", s.getVideo)
 
 	// Serve static files for testing
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

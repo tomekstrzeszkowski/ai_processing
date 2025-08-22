@@ -115,6 +115,19 @@ func (v *Viewer) GetVideoList(start time.Time, end time.Time) []video.Video {
 	return videoList
 }
 
-func (v *Viewer) GetVideo(name string) {
-
+func (v *Viewer) GetVideo(name string) []byte {
+	stream, err := (*v.Host).NewStream(context.Background(), (*v.Info).ID, "/get-video/1.0.0")
+	if err != nil {
+		log.Println(err)
+		return []byte{}
+	}
+	defer stream.Close()
+	stream.Write([]byte(name + "\n"))
+	//video.ReceiveVideoFile(stream, "./client_video")
+	data, err := io.ReadAll(stream)
+	if err != nil {
+		log.Printf("Error reading stream: %v", err)
+		return []byte{}
+	}
+	return data
 }

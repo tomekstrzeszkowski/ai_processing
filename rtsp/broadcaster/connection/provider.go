@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"log"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -60,11 +61,26 @@ func (p *Provider) StartListening(ctx context.Context) {
 		p.frameBuffer = [][]byte{}
 	})
 	p.host.SetStreamHandler("/get-video/1.0.0", func(stream network.Stream) {
-
+		defer stream.Close()
+		buf := bufio.NewReader(stream)
+		name, err := buf.ReadString('\n')
+		if err != nil {
+			log.Printf("Error reading filename: %v", err)
+			return
+		}
+		name = strings.TrimSpace(name)
+		if err := video.ValidateFilename(name); err != nil {
+			log.Printf("Invalid filename: %v", err)
+			return
+		}
+		filePath := filepath.Join(p.path, name)
+		//TODO: better way to send video in stream
+		videoBytes, _ := video.GetVideoByPath(filePath)
+		stream.Write(videoBytes)
+		stream.Close()
 	})
 
 	p.host.SetStreamHandler("/get-video-list/1.0.0", func(stream network.Stream) {
-		log.Printf("Get video list")
 		buf := bufio.NewReader(stream)
 		timeRangeData, _ := buf.ReadString('\n')
 		timeRangeData = strings.ReplaceAll(timeRangeData, "\n", "")
@@ -77,7 +93,6 @@ func (p *Provider) StartListening(ctx context.Context) {
 			log.Printf("Error marshaling JSON: %v", err)
 			return
 		}
-		log.Printf("video list %v", videoList)
 		stream.Write(jsonData)
 		stream.Close()
 	})
