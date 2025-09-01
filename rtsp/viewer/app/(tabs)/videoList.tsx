@@ -1,10 +1,11 @@
 import { VideoPlayer } from '@/components/VideoPlayer';
 import { useFocusEffect } from '@react-navigation/native';
 // No external converter needed
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Button,
   Dimensions,
+  ScrollView,
   StyleSheet,
   View
 } from 'react-native';
@@ -21,6 +22,8 @@ export default () => {
   const [items, setItems] = useState([]);
   const [videoData, setVideoData] = useState("");
   const [videoName, setVideoName] = useState("");
+  const videoPlayerRef = useRef<View>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   // Cleanup MediaSource and blob URLs when component unmounts or video changes
   useEffect(() => {
@@ -45,6 +48,17 @@ export default () => {
     return before.toISOString().split('T')[0];
   });
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const scrollToVideoPlayer = () => {
+    if (scrollViewRef.current) {
+      videoPlayerRef.current?.measureInWindow((x, y) => {
+        scrollViewRef.current?.scrollTo({
+          y,
+          animated: false
+        });
+      });
+    }
+  };
+
   const onChangeDateRange = (startDate: string, endDate: string) => {
     setStartDate(startDate);
     setEndDate(endDate);
@@ -96,6 +110,10 @@ export default () => {
         } catch (error) {
           console.error('Error converting video:', error);
         }
+        setTimeout(() => {
+          scrollToVideoPlayer();
+        }, 100)
+        
       }
     } catch (error) {
       console.error('Error fetching video:', error);
@@ -122,29 +140,31 @@ export default () => {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
-        <View>
-          <div className="p-4">
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => onChangeDateRange(e.target.value, endDate)}
-              className="mr-2 p-2 border rounded"
-            />
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => onChangeDateRange(startDate, e.target.value)}
-              min={startDate}
-              className="p-2 border rounded"
-            />
-          </div>
-        </View>
-        <View>
-          {videoData ? <VideoPlayer videoUrl={videoData} /> : <div>No video selected</div>}
-        </View>
-        <View style={styles.gridContainer}>
-          {items.map((item, index) => renderVideoItem(item, index))}
-        </View>
+        <ScrollView 
+          ref={scrollViewRef}
+          contentContainerStyle={styles.scrollContent}>
+          <View>
+            <div>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => onChangeDateRange(e.target.value, endDate)}
+              />
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => onChangeDateRange(startDate, e.target.value)}
+                min={startDate}
+              />
+            </div>
+          </View>
+          <View style={styles.gridContainer}>
+            {items.map((item, index) => renderVideoItem(item, index))}
+          </View>
+          <View ref={videoPlayerRef}>
+            {videoData ? <VideoPlayer videoUrl={videoData} name={videoName} scrollView={scrollViewRef} /> : <div>No video selected</div>}
+          </View>
+        </ScrollView>
       </SafeAreaView>
     </SafeAreaProvider>
   );
@@ -154,6 +174,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#464646fd',
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   gridContainer: {
     flexDirection: 'row',

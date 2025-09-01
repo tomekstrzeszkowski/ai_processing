@@ -1,8 +1,10 @@
 package video
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -235,4 +237,40 @@ func StreamFileWithProgress(stream network.Stream, filePath string) error {
 	}
 
 	return nil
+}
+
+func ConvertAndGetVideoForWeb(filePath string) ([]byte, error) {
+	tempFile, err := os.CreateTemp("", "temp-*.mp4")
+	if err != nil {
+		return nil, fmt.Errorf("error creating temp file: %v", err)
+	}
+	defer func() {
+		tempFile.Close()
+		os.Remove(tempFile.Name())
+	}()
+
+	cmd := exec.Command("ffmpeg",
+		"-y",         // Force overwrite without asking
+		"-f", "h264", // Force input format to H264
+		"-i", filePath, // Input file
+		"-c:v", "copy", // Copy video stream without re-encoding
+		"-f", "mp4", // Force MP4 container
+		"-movflags", "+faststart", // Enable fast start for streaming
+		tempFile.Name())
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		log.Printf("FFmpeg output: %s", stderr.String())
+		return nil, fmt.Errorf("error converting video: %v\nFFmpeg error: %s", err, stderr.String())
+	}
+
+	// Read the entire file into memory
+	videoBytes, err := os.ReadFile(tempFile.Name())
+	if err != nil {
+		return nil, fmt.Errorf("error reading converted file: %v", err)
+	}
+
+	return videoBytes, nil
 }

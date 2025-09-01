@@ -39,6 +39,8 @@ services:
       dockerfile: ./Dockerfile
     ports:
       - 8081:8081
+    volumes:
+      - ./viewer/:/app
 
   server:
     build: 

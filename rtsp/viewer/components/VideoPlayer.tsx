@@ -1,26 +1,44 @@
 import React, { useState } from 'react';
+import {
+  Button,
+  ScrollView,
+  StyleSheet
+} from 'react-native';
 
 interface VideoPlayerProps {
   videoUrl: string;
+  name: string;
+  scrollView?: React.RefObject<ScrollView | null>;
 }
 
-export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl }) => {
-  const [error, setError] = useState<string | null>(null);
+export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, name, scrollView }) => {
+  const [error, setError] = useState<string>("");
 
   if (!videoUrl) {
-    return <div className="p-4">No video selected</div>;
+    return <div>No video selected</div>;
   }
 
   return (
-    <div className="p-4">
-      <h2 className="text-xl font-bold mb-4">Video Player</h2>
+    <div style={styles.container}>
+      <Button 
+        title={`${name} ⬆️`}
+        color="#4CAF50"
+        onPress={() => {
+          scrollView?.current?.scrollTo({
+          y: 0,
+          animated: false
+        });
+        }}
+      />
+
       {error ? (
-        <div className="text-red-500">{error}</div>
+        <div>{error}</div>
       ) : (
         <video 
           src={videoUrl} 
           controls 
-          className="w-full max-w-2xl"
+          width={styles.videoSize.width}
+          height={styles.videoSize.height}
           onError={(e) => {
             console.error('Video error:', e);
             setError('Error playing video');
@@ -30,3 +48,15 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl }) => {
     </div>
   );
 };
+
+const styles = StyleSheet.create({
+  videoSize: {
+    width: '100%',
+    height: '100%',
+  },
+  container: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+});
