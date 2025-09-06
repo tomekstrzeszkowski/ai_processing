@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
+	"log"
 	"time"
 
 	mrand "math/rand"
@@ -17,6 +18,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
+	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
+	dutil "github.com/libp2p/go-libp2p/p2p/discovery/util"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	tls "github.com/libp2p/go-libp2p/p2p/security/tls"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
@@ -209,4 +212,52 @@ func AnnounceDHT(ctx context.Context, kademliaDHT *dht.IpfsDHT, rendezvous strin
 			}
 		}
 	}()
+}
+func InitDHTDiscovery(ctx context.Context, host host.Host, kademliaDHT *dht.IpfsDHT, rendezvous string) chan peer.AddrInfo {
+	peerChan := make(chan peer.AddrInfo)
+
+	go func() {
+		defer close(peerChan)
+
+		// Wait for DHT to be ready
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(5 * time.Second): // Give DHT time to bootstrap
+		}
+
+		// Announce ourselves
+		discovery := drouting.NewRoutingDiscovery(kademliaDHT)
+		dutil.Advertise(ctx, discovery, rendezvous)
+
+		// Look for peers periodically
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				peersChan, err := discovery.FindPeers(ctx, rendezvous)
+				if err != nil {
+					log.Printf("Error finding peers: %v", err)
+					continue
+				}
+
+				for peer := range peersChan {
+					if peer.ID == host.ID() {
+						continue // Skip self
+					}
+					select {
+					case peerChan <- peer:
+					case <-ctx.Done():
+						return
+					}
+				}
+			}
+		}
+	}()
+
+	return peerChan
 }
