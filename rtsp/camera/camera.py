@@ -29,17 +29,16 @@ def process_frame(frame, detector):
             2,
         )
         detected_objects += 1
-    if detected_objects:
-        now_label = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        cv2.putText(
-            frame, 
-            f"{now_label} objects: {detected_objects}", 
-            (20, 20), 
-            cv2.FONT_HERSHEY_SIMPLEX, 
-            0.7, 
-            (255, 255, 255),
-            2,
-        )
+    now_label = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cv2.putText(
+        frame, 
+        f"{now_label} objects: {detected_objects}", 
+        (20, 20), 
+        cv2.FONT_HERSHEY_SIMPLEX, 
+        0.7, 
+        (255, 255, 255),
+        2,
+    )
     
     return frame, type_
 
