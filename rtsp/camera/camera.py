@@ -5,6 +5,7 @@ import time
 from detector import Detector
 from dotenv import load_dotenv
 from saver import write_frame_to_shared_memory
+from datetime import datetime
 
 load_dotenv()
 
@@ -50,7 +51,8 @@ def main():
 
     
     # Create VideoCapture object
-    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "video_codec;h264_cuvid"
+    if capture_options := os.getenv("OPENCV_FFMPEG_CAPTURE_OPTIONS", ""):
+        os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = capture_options
 
     if url.startswith("rtsp"):
         video = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
@@ -81,7 +83,7 @@ def main():
     start_time = time.time()
 
     #optimize
-    skip_frames = 10
+    skip_frames = int(os.getenv("SKIP_FRAMES", "10"))
     target_width = int(width * 4)
     target_height = int(height * 4)
     video.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
@@ -119,6 +121,8 @@ def main():
                 frame_count = 0
                 start_time = time.time()
             
+            if not display_preview:
+                continue
             # Break on 'q' key press
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q'):
@@ -127,15 +131,15 @@ def main():
                 # Save current frame
                 timestamp = int(time.time())
                 cv2.imwrite(f'videotured_frame_{timestamp}.jpg', frame)
-                print(f"Frame saved as videotured_frame_{timestamp}.jpg")
-    
+                print(f"[{timestamp}] Frame saved as video_frame.jpg")
     except KeyboardInterrupt:
         print("Interrupted by user")
-    
+
     finally:
         # Clean up
         video.release()
-        cv2.destroyAllWindows()
+        if display_preview:
+            cv2.destroyAllWindows()
         print("Camera connection closed")
 
 if __name__ == "__main__":
