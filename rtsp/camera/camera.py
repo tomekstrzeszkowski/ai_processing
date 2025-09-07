@@ -2,12 +2,14 @@ import os
 import cv2
 import numpy as np
 import time
+import re
 from detector import Detector
 from dotenv import load_dotenv
 from saver import write_frame_to_shared_memory
 from datetime import datetime
 
 load_dotenv()
+SHOW_NOW_LABEL = bool(os.getenv("SHOW_NOW_LABEL", ""))
 
 
 def process_frame(frame, detector):
@@ -29,7 +31,7 @@ def process_frame(frame, detector):
             2,
         )
         detected_objects += 1
-    now_label = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now_label = datetime.now().strftime("%Y-%m-%d %H:%M:%S") if SHOW_NOW_LABEL else ""
     cv2.putText(
         frame, 
         f"{now_label} objects: {detected_objects}", 
@@ -38,18 +40,15 @@ def process_frame(frame, detector):
         0.7, 
         (255, 255, 255),
         2,
-    )
-    
+    )    
     return frame, type_
 
 def main():
     url = os.getenv("IP_CAM_URL", "copy .env.template")
     display_preview = bool(os.getenv("DISPLAY_PREVIEW", ""))
     detector = Detector()
-    print(f"Connecting to camera: {url} with AI model")
-
-    
-    # Create VideoCapture object
+    url_clean = re.sub(r"(rtsp:\/\/.+:)(.+)@", r"\1***@", url)
+    print(f"Connecting to camera: {url_clean} with AI model")
     if capture_options := os.getenv("OPENCV_FFMPEG_CAPTURE_OPTIONS", ""):
         os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = capture_options
 
@@ -133,9 +132,7 @@ def main():
                 print(f"[{timestamp}] Frame saved as video_frame.jpg")
     except KeyboardInterrupt:
         print("Interrupted by user")
-
     finally:
-        # Clean up
         video.release()
         if display_preview:
             cv2.destroyAllWindows()
