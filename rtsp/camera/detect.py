@@ -2,6 +2,7 @@ from facenet_pytorch import MTCNN
 import torch
 import numpy as np
 import cv2
+import os
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from yolo_object import YoloObject, YOLO_MODEL_NAME_TO_SCALE_TO_ORIGINAL
 from detector import Detector
@@ -10,6 +11,7 @@ from saver import write_frame_to_shared_memory
 from datetime import datetime
 
 load_dotenv()
+
 SHOW_NOW_LABEL = bool(os.getenv("SHOW_NOW_LABEL", ""))
 file_name = "video.mp4"
 

@@ -42,8 +42,6 @@ func main() {
 	}()
 	mdnsPeerChan := connection.InitMDNS(host, connection.RendezVous)
 	dhtPeerChan := connection.InitDHTDiscovery(ctx, host, kademliaDHT, connection.RendezVous)
-
-	connectedPeers := make(map[peer.ID]bool) // Track connected peers
 	for {
 		var peer peer.AddrInfo
 		select {
@@ -55,14 +53,7 @@ func main() {
 			return
 		}
 		if peer.ID == host.ID() {
-			// if other end peer id greater than us, don't connect to it, just wait for it to connect us
 			fmt.Println("Found peer:", peer, " id is greater than us, wait for it to connect to us")
-			continue
-		}
-		fmt.Println("Found peer:", peer, ", connecting")
-
-		// Skip if already connected
-		if connectedPeers[peer.ID] {
 			continue
 		}
 		<-ctx.Done()

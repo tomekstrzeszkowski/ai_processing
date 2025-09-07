@@ -39,7 +39,6 @@ func main() {
 			return
 		}
 		if peer.ID == host.ID() {
-			// if other end peer id greater than us, don't connect to it, just wait for it to connect us
 			fmt.Println("Found peer:", peer, " id is greater than us, wait for it to connect to us")
 			continue
 		}
