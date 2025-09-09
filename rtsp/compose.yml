@@ -30,8 +30,6 @@ services:
     tmpfs:
       - /shared:size=256m
     command: "python detect.py"
-    devices:
-      - /dev/video0:/dev/video0
 
   app:
     build: 

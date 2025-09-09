@@ -1,0 +1,6 @@
+services:
+  # viewer:
+  #   command: /dlv --listen=:2346 --headless=true --api-version=2 exec ./bin/viewer  # run debugger
+  camera:
+    devices:
+     - /dev/video0:/dev/video0  # add phisical device
