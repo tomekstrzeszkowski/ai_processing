@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"log"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -50,6 +51,7 @@ func (p *Provider) StartListening(ctx context.Context) {
 	fullAddr := GetHostAddress(p.host)
 	log.Printf("I am %s\n", fullAddr)
 	p.host.SetStreamHandler("/get-frame/1.0.0", func(stream network.Stream) {
+		defer stream.Close()
 		now := time.Now()
 		timestamp := make([]byte, 8)
 		binary.BigEndian.PutUint64(timestamp, uint64(now.UnixMicro()))
@@ -57,7 +59,6 @@ func (p *Provider) StartListening(ctx context.Context) {
 		for _, frame := range p.frameBuffer {
 			stream.Write(frame)
 		}
-		stream.Close()
 		p.frameBuffer = [][]byte{}
 	})
 	p.host.SetStreamHandler("/get-video/1.0.0", func(stream network.Stream) {
@@ -74,14 +75,33 @@ func (p *Provider) StartListening(ctx context.Context) {
 			return
 		}
 		filePath := filepath.Join(p.path, name)
-		//TODO: better way to send video in stream
-		//videoBytes, _ := video.GetVideoByPath(filePath)
-		videoBytes, _ := video.ConvertAndGetVideoForWeb(filePath)
+		videoBytes, _ := video.ConvertAndGetVideoForWeb(filePath, -1, -1)
 		stream.Write(videoBytes)
-		stream.Close()
 	})
+	p.host.SetStreamHandler("/get-video-chunk/1.0.0", func(stream network.Stream) {
+		defer stream.Close()
+		buf := bufio.NewReader(stream)
+		rangeData, _ := buf.ReadString('\n')
+		rangeData = strings.ReplaceAll(rangeData, "\n", "")
+		parts := strings.SplitN(rangeData, "|", 3)
+		if len(parts) != 3 {
+			log.Printf("Invalid range request: %v", rangeData)
+			return
+		}
+		name := parts[0]
 
+		if err := video.ValidateFilename(name); err != nil {
+			log.Printf("Invalid filename: %v", err)
+			return
+		}
+		filePath := filepath.Join(p.path, name)
+		start, _ := strconv.ParseInt(parts[1], 10, 64)
+		end, _ := strconv.ParseInt(parts[2], 10, 64)
+		videoBytes, _ := video.ConvertAndGetVideoForWeb(filePath, start, end)
+		stream.Write(videoBytes)
+	})
 	p.host.SetStreamHandler("/get-video-list/1.0.0", func(stream network.Stream) {
+		defer stream.Close()
 		buf := bufio.NewReader(stream)
 		timeRangeData, _ := buf.ReadString('\n')
 		timeRangeData = strings.ReplaceAll(timeRangeData, "\n", "")
@@ -95,7 +115,6 @@ func (p *Provider) StartListening(ctx context.Context) {
 			return
 		}
 		stream.Write(jsonData)
-		stream.Close()
 	})
 }
 

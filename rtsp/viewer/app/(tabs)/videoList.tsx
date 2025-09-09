@@ -88,7 +88,7 @@ export default () => {
     setVideoData("");
     setVideoName("");
     try {
-      const url = `${httpServerUrl}/video/${name}`;
+      const url = `${httpServerUrl}/video-range/${name}`;
       const response = await fetch(url, {
         method: 'GET',
         headers: {

@@ -239,7 +239,7 @@ func StreamFileWithProgress(stream network.Stream, filePath string) error {
 	return nil
 }
 
-func ConvertAndGetVideoForWeb(filePath string) ([]byte, error) {
+func ConvertAndGetVideoForWeb(filePath string, start int64, end int64) ([]byte, error) {
 	tempFile, err := os.CreateTemp("", "temp-*.mp4")
 	if err != nil {
 		return nil, fmt.Errorf("error creating temp file: %v", err)
@@ -248,25 +248,33 @@ func ConvertAndGetVideoForWeb(filePath string) ([]byte, error) {
 		tempFile.Close()
 		os.Remove(tempFile.Name())
 	}()
-
-	cmd := exec.Command("ffmpeg",
+	args := []string{
 		"-y",         // Force overwrite without asking
 		"-f", "h264", // Force input format to H264
-		"-i", filePath, // Input file
+	}
+	if start >= 0 && end > start {
+		duration := end - start
+		args = append(args, "-ss", fmt.Sprintf("%d", start))
+		args = append(args, "-i", filePath)
+		args = append(args, "-t", fmt.Sprintf("%d", duration))
+	} else {
+		args = append(args, "-i", filePath)
+	}
+	args = append(args,
 		"-c:v", "copy", // Copy video stream without re-encoding
 		"-f", "mp4", // Force MP4 container
 		"-movflags", "+faststart", // Enable fast start for streaming
 		tempFile.Name())
+
+	cmd := exec.Command("ffmpeg", args...)
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
 		log.Printf("FFmpeg output: %s", stderr.String())
-		return nil, fmt.Errorf("error converting video: %v\nFFmpeg error: %s", err, stderr.String())
+		return nil, fmt.Errorf("error converting video chunk: %v\nFFmpeg error: %s", err, stderr.String())
 	}
-
-	// Read the entire file into memory
 	videoBytes, err := os.ReadFile(tempFile.Name())
 	if err != nil {
 		return nil, fmt.Errorf("error reading converted file: %v", err)

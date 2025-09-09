@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -193,6 +194,41 @@ func (s *Server) getVideoList(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(videoList)
 }
 
+func (s *Server) getVideoRange(w http.ResponseWriter, r *http.Request) {
+	s.setCORSHeaders(w)
+	w.Header().Set("Content-Type", "video/mp4")
+	w.Header().Set("Accept-Ranges", "bytes")
+	w.Header().Set("Cache-Control", "no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	videoName := r.PathValue("name")
+	rangeHeader := r.Header.Get("Range")
+	if rangeHeader == "" {
+		viewer := s.GetViewer()
+		chunk := viewer.GetVideoChunk(videoName, 0, 1024)
+		reader := bytes.NewReader(chunk)
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", 0, 1024, 1024*1024*1024))
+		w.WriteHeader(http.StatusPartialContent)
+		w.Write(chunk)
+		w.WriteHeader(http.StatusOK)
+		if _, err := io.Copy(w, reader); err != nil {
+			log.Printf("Error streaming video: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		return
+	}
+	var start, end int64
+	if _, err := fmt.Sscanf(strings.TrimPrefix(rangeHeader, "bytes="), "%d-%d", &start, &end); err != nil {
+		if _, err := fmt.Sscanf(strings.TrimPrefix(rangeHeader, "bytes="), "%d-", &start); err != nil {
+			log.Printf("Invalid range format: %s", rangeHeader)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	}
+	log.Println("Range request:", start, end)
+	//w.Header().Set("Expires", "0")
+	//w.Header().Set("Content-Length", fmt.Sprintf("%d", size))
+}
+
 // Add CORS headers to response
 func (s *Server) setCORSHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -206,6 +242,7 @@ func (s *Server) PrepareEndpoints() {
 	http.HandleFunc("/status", s.handleStatus)
 	http.HandleFunc("/video-list", s.getVideoList)
 	http.HandleFunc("/video/{name}", s.getVideo)
+	http.HandleFunc("/video-range/{name}", s.getVideoRange)
 
 	// Serve static files for testing
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

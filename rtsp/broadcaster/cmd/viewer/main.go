@@ -22,7 +22,6 @@ func main() {
 	golog.SetAllLoggers(golog.LevelError)
 
 	host, kademliaDHT, _ := connection.MakeEnhancedHost(ctx, 10001, false, 0)
-	//host, _ := connection.MakeBasicHost(10001, false, 0)
 	defer host.Close()
 	defer kademliaDHT.Close()
 

@@ -89,6 +89,9 @@ func (v *Viewer) GetFrames() ([][]byte, error) {
 	if v.lastFramePacket == nil {
 		v.lastFramePacket = ts
 	}
+	if ts == nil && len(dataFrames) == 0 {
+		return nil, fmt.Errorf("No frames received, provider might be offline")
+	}
 	if !v.isTimestampHealthy(ts) {
 		return nil, fmt.Errorf("Received frames from the past!")
 	}
@@ -103,7 +106,6 @@ func (v *Viewer) GetVideoList(start time.Time, end time.Time) []video.Video {
 		return []video.Video{}
 	}
 	defer stream.Close()
-	//TODO: get date range from frontend
 	dateRange := fmt.Sprintf("%s-%s", start.Format("2006-01-02"), end.Format("2006-01-02"))
 	stream.Write([]byte(dateRange + "\n"))
 	data, err := io.ReadAll(stream)
@@ -124,7 +126,21 @@ func (v *Viewer) GetVideo(name string) []byte {
 	}
 	defer stream.Close()
 	stream.Write([]byte(name + "\n"))
-	//video.ReceiveVideoFile(stream, "./client_video")
+	data, err := io.ReadAll(stream)
+	if err != nil {
+		log.Printf("Error reading stream: %v", err)
+		return []byte{}
+	}
+	return data
+}
+func (v *Viewer) GetVideoChunk(name string, start int64, end int64) []byte {
+	stream, err := (*v.Host).NewStream(context.Background(), (*v.Info).ID, "/get-video-chunk/1.0.0")
+	if err != nil {
+		log.Println(err)
+		return []byte{}
+	}
+	defer stream.Close()
+	stream.Write([]byte(fmt.Sprintf("%s|%d|%d\n", name, start, end)))
 	data, err := io.ReadAll(stream)
 	if err != nil {
 		log.Printf("Error reading stream: %v", err)
