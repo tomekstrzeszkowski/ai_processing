@@ -1,4 +1,3 @@
-from facenet_pytorch import MTCNN
 import torch
 import numpy as np
 import cv2
@@ -6,9 +5,12 @@ import os
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from yolo_object import YoloObject, YOLO_MODEL_NAME_TO_SCALE_TO_ORIGINAL
 from detector import Detector
+from motion import MotionDetector
+from face import FaceDetector
 from dotenv import load_dotenv
 from saver import write_frame_to_shared_memory
 from datetime import datetime
+
 
 load_dotenv()
 
@@ -29,18 +31,25 @@ if __name__ == "__main__":
     BLUR_FACES = False
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     # face detector
-    mtcnn = MTCNN(keep_all=True, device=device)
+    face = FaceDetector(device)
     # human detecter
     detector = Detector()
+    motion = MotionDetector(min_area=500, threshold=25)
     font = ImageFont.load_default()
-    frames_tracked = []
     video = cv2.VideoCapture(file_name)
     length = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
     width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = video.get(cv2.CAP_PROP_FPS)
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    filename_chunks = file_name.split(".")
+    processed_name = (
+        f"{'_'.join([*filename_chunks[:1], 'processed'])}.{filename_chunks[-1]}"
+    )
+    video_tracked = cv2.VideoWriter(processed_name, fourcc, fps, (width, height))
     i = 0
     yolo_object_to_verbose = {y.value: y.name for y in YoloObject}
+    type_detected = -1
     while frames_to_read := True:
         i += 1
         frames_to_read, frame = video.read()
@@ -54,25 +63,27 @@ if __name__ == "__main__":
             frame_array, (int(frame.size[0] * 0.99), int(frame.size[1] * 0.99))
         )
         draw = ImageDraw.Draw(frame)
-        # detect humans
+        # detect
+        motion_detected, _ = next(motion.detect(frame_array), (False, tuple()))
         detected = 0
-        type_ = -1
-        for x0, y0, w, h, type_, scale in detector.detect_yolo_with_largest_box(frame_array):
-            detected += 1
-            cv2.rectangle(frame_array, (x0, y0), (x0 + w, y0 + h), (0, 255, 0), 2)
-            cv2.putText(
-                frame_array,
-                f"Detected {yolo_object_to_verbose[type_]}",
-                (x0, y0),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (255, 255, 255),
-                2,
-            )
+        if motion_detected or type_detected != -1:
+            type_detected = -1
+            for x0, y0, w, h, type_detected, scale in detector.detect_yolo_with_largest_box(frame_array):
+                detected += 1
+                cv2.rectangle(frame_array, (x0, y0), (x0 + w, y0 + h), (0, 255, 0), 2)
+                cv2.putText(
+                    frame_array,
+                    f"Detected {yolo_object_to_verbose[type_detected]}",
+                    (x0, y0),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (255, 255, 255),
+                    2,
+                )
         now_label = datetime.now().strftime("%Y-%m-%d %H:%M:%S") if SHOW_NOW_LABEL else ""
         cv2.putText(
             frame_array,
-            f"{now_label} objects: {detected}",
+            f"{now_label} {detected=}{'.' if motion_detected else ''}",
             (20, 20),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.7,
@@ -83,8 +94,7 @@ if __name__ == "__main__":
 
         # detect faces
         if BLUR_FACES:
-            faces, _ = mtcnn.detect(frame_array)
-            if faces is None:
+            if (faces := face.detect(frame_array)) is None:
                 continue
             draw.text((20, 50), f"Faces: {len(faces)}", fill="white", font=font)
             blurred = frame_draw.filter(ImageFilter.GaussianBlur(40))
@@ -96,19 +106,9 @@ if __name__ == "__main__":
         success, buffer = cv2.imencode('.jpg', frame_bgr)
         if success:
             write_frame_to_shared_memory(
-                buffer, type_, shm_name=f"video_frame"
+                buffer, type_detected, shm_name=f"video_frame"
             )
-            del buffer  # explicit free-up memory
-        frames_tracked.append(frame_draw.resize((width, height), Image.BILINEAR))
-
-
-    dim = frames_tracked[0].size
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    filename_chunks = file_name.split(".")
-    processed_name = (
-        f"{'_'.join([*filename_chunks[:1], 'processed'])}.{filename_chunks[-1]}"
-    )
-    video_tracked = cv2.VideoWriter(processed_name, fourcc, fps, dim)
-    for frame in frames_tracked:
-        video_tracked.write(cv2.cvtColor(np.array(frame), cv2.COLOR_RGB2BGR))
+        frame_bgr = cv2.resize(frame_bgr, (width, height))
+        video_tracked.write(frame_bgr)
+    video.release()
     video_tracked.release()

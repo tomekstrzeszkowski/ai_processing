@@ -4,6 +4,7 @@ import numpy as np
 import time
 import re
 from detector import Detector
+from motion import MotionDetector
 from dotenv import load_dotenv
 from saver import write_frame_to_shared_memory
 from datetime import datetime
@@ -18,12 +19,12 @@ def process_frame(frame, detector):
         frame, (int(width * 0.99), int(height * 0.99))
     )
     detected_objects = 0
-    type_ = -1
-    for x0, y0, w, h, type_, scale in detector.detect_yolo_with_nms(scaled_frame):
+    type_detected = -1
+    for x0, y0, w, h, type_detected, scale in detector.detect_yolo_with_nms(scaled_frame):
         cv2.rectangle(frame, (x0, y0), (x0 + w, y0 + h), (0, 255, 0), 1)
         cv2.putText(
             frame,
-            f"Detected {detector.yolo_class_id_to_verbose[type_]}!",
+            f"Detected {detector.yolo_class_id_to_verbose[type_detected]}!",
             (x0+10, y0+20),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.5,
@@ -41,12 +42,13 @@ def process_frame(frame, detector):
         (255, 255, 255),
         2,
     )    
-    return frame, type_
+    return frame, type_detected
 
 def main():
     url = os.getenv("IP_CAM_URL", "copy .env.template")
     display_preview = bool(os.getenv("DISPLAY_PREVIEW", ""))
     detector = Detector()
+    motion = MotionDetector(min_area=500, threshold=25)
     url_clean = re.sub(r"(rtsp:\/\/.+:)(.+)@", r"\1***@", url)
     print(f"Connecting to camera: {url_clean} with AI model")
     if capture_options := os.getenv("OPENCV_FFMPEG_CAPTURE_OPTIONS", ""):
@@ -87,7 +89,7 @@ def main():
     video.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     video.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
     video.set(cv2.CAP_PROP_FPS, 3)
-    
+    type_detected = -1
     try:
         while True:
             frames_to_read, frame = video.read()
@@ -99,8 +101,10 @@ def main():
 
             if frame_count % (skip_frames + 1) != 0:
                 continue
-            small_frame = cv2.resize(frame, (target_width, target_height))
-            processed_frame, type_ = process_frame(small_frame, detector)
+            motion_detected, _ = next(motion.detect(frame_array), (False, tuple()))
+            if motion_detected or type_detected != -1:
+                small_frame = cv2.resize(frame, (target_width, target_height))
+                processed_frame, type_detected = process_frame(small_frame, detector)
             
             # Display frames
             if display_preview:
@@ -109,7 +113,7 @@ def main():
             success, buffer = cv2.imencode('.jpg', processed_frame_bgr)
             if success:
                 write_frame_to_shared_memory(
-                    buffer, type_, shm_name=f"video_frame"
+                    buffer, type_detected, shm_name=f"video_frame"
                 )
                 del buffer
             elapsed_time = time.time() - start_time
