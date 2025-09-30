@@ -18,11 +18,15 @@ const { width, height } = Dimensions.get('window');
 
 const App = () => {
   const [isConnected, setIsConnected] = useState(false);
-  const [, setFrameData] = useState(null);
   const [lastFrameTime, setLastFrameTime] = useState(null);
   const [clientCount, setClientCount] = useState(0);
   const [imageUri, setImageUri] = useState(null);
   const frameCountRef = useRef(0);
+  
+  // Frame throttling to prevent memory overflow
+  const lastUpdateRef = useRef(0);
+  const lastUriRef = useRef(null);
+  const MIN_FRAME_INTERVAL = 33; // ~30fps max (adjust as needed)
 
   const showAlert = (title, message) => {
     if (Platform.OS === 'web') {
@@ -31,6 +35,7 @@ const App = () => {
       Alert.alert(title, message);
     }
   };
+  
   const {
     wsRef, isConnecting, setIsConnecting, serverUrl, httpServerUrl
   } = useWebSocket();
@@ -58,11 +63,26 @@ const App = () => {
         try {
           const message = JSON.parse(event.data);
           if (message.type === 'frame') {
+            // CRITICAL: Frame throttling to prevent memory overflow
+            const now = Date.now();
+            if (now - lastUpdateRef.current < MIN_FRAME_INTERVAL) {
+              // Skip this frame - too soon since last update
+              return;
+            }
+            
+            lastUpdateRef.current = now;
             frameCountRef.current += 1;
+            
+            // Create new URI
             const uri = `data:image/jpeg;base64,${message.data}`;
+            
+            // Clear old URI reference to help GC
+            lastUriRef.current = null;
+            
             setImageUri(uri);
-            setFrameData(message.data);
+            lastUriRef.current = uri;
             setLastFrameTime(new Date().toLocaleTimeString());
+            
           } else if (message.type === 'client_count') {
             setClientCount(message.count);
           }
@@ -74,8 +94,9 @@ const App = () => {
       wsRef.current.onclose = (event) => {
         setIsConnected(false);
         setIsConnecting(false);
-        setFrameData(null);
         setImageUri(null);
+        lastUriRef.current = null;
+        frameCountRef.current = 0;
         console.log('Disconnected from WebSocket server', event.code, event.reason);
       };
       
@@ -96,6 +117,8 @@ const App = () => {
       wsRef.current = null;
     }
     setImageUri(null);
+    lastUriRef.current = null;
+    frameCountRef.current = 0;
   };
 
   const fetchStatus = async () => {
@@ -132,6 +155,9 @@ const App = () => {
       if (wsRef.current) {
         wsRef.current.close();
       }
+      // Cleanup references
+      setImageUri(null);
+      lastUriRef.current = null;
     };
   }, []);
 
@@ -169,7 +195,6 @@ const App = () => {
             )}
           </TouchableOpacity>
         </View>
-
 
         <View style={styles.infoContainer}>
           <View style={styles.infoRow}>

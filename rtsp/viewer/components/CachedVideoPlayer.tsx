@@ -6,181 +6,158 @@ interface CachedVideoPlayerProps {
   styles: any;
 }
 
-export const CachedVideoPlayer: React.FC<CachedVideoPlayerProps> = ({ imageUri, frameCountRef, styles }) => {
-  const [displayUri, setDisplayUri] = useState<string | null>(null); // Start as null
+export const CachedVideoPlayer: React.FC<CachedVideoPlayerProps> = ({ 
+  imageUri, 
+  frameCountRef, 
+  styles 
+}) => {
   const [isLoading, setIsLoading] = useState(false);
-  const [hasInitialized, setHasInitialized] = useState(false); // Track initialization
+  const [hasInitialized, setHasInitialized] = useState(false);
   
-  // Use refs to directly manipulate DOM and avoid React keeping references
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const currentImageRef = useRef<HTMLImageElement | null>(null);
+  const pendingImageRef = useRef<HTMLImageElement | null>(null);
+  const isTransitioningRef = useRef(false);
   
-  // Keep track of created images for cleanup
-  const imageRefsSet = useRef<Set<HTMLImageElement>>(new Set());
-  const forceCleanupImage = useCallback((imgElement: HTMLImageElement | null) => {
-    if (!imgElement) return;
+  // Track the last processed URI to avoid duplicate processing
+  const lastProcessedUriRef = useRef<string | null>(null);
+
+  // Aggressive cleanup function
+  const destroyImage = useCallback((img: HTMLImageElement | null) => {
+    if (!img) return;
     
     try {
-      // Remove from our tracking set
-      imageRefsSet.current.delete(imgElement);
+      // Cancel any pending loads
+      img.onload = null;
+      img.onerror = null;
+      img.onabort = null;
       
-      // Clear all image properties that hold memory
-      imgElement.src = '';
-      imgElement.srcset = '';
-      imgElement.onload = null;
-      imgElement.onerror = null;
-      imgElement.onabort = null;
-      
-      // Force remove from DOM if still attached
-      if (imgElement.parentNode) {
-        imgElement.parentNode.removeChild(imgElement);
+      // Remove from DOM first
+      if (img.parentNode) {
+        img.parentNode.removeChild(img);
       }
       
-      // Set to null to break references
-      imgElement = null;
+      // Clear the src to release the base64 data from memory
+      // This is CRITICAL for releasing base64 URIs
+      img.removeAttribute('src');
+      img.removeAttribute('srcset');
+      img.src = '';
+      
     } catch (error) {
-      console.warn('Image cleanup error:', error);
+      console.warn('Error destroying image:', error);
     }
   }, []);
 
-  // Cleanup all tracked images
-  const cleanupAllImages = useCallback(() => {
-    imageRefsSet.current.forEach(img => {
-      forceCleanupImage(img);
-    });
-    imageRefsSet.current.clear();
-  }, [forceCleanupImage]);
-
-  const performCrossfade = useCallback((newImg: HTMLImageElement, oldImg: HTMLImageElement | null) => {
-    if (!containerRef.current) return;
+  // Load new image with proper cleanup
+  const loadNewFrame = useCallback((uri: string) => {
+    // Skip if already processing this URI or if transitioning
+    if (uri === lastProcessedUriRef.current || isTransitioningRef.current) {
+      return;
+    }
     
-    // Setup new image styles
-    newImg.style.width = '100%';
-    newImg.style.height = '100%';
-    newImg.style.objectFit = 'contain';
-    newImg.style.position = 'absolute';
-    newImg.style.top = '0';
-    newImg.style.left = '0';
-    newImg.style.opacity = '0';
-    newImg.style.transition = 'opacity 100ms linear';
+    // Skip if we're still loading
+    if (isLoading) {
+      return;
+    }
     
-    // Add new image to container
-    containerRef.current.appendChild(newImg);
-    
-    // Force reflow to ensure transition works
-    newImg.offsetHeight;
-    
-    // Fade in new image
-    requestAnimationFrame(() => {
-      newImg.style.opacity = '1';
-      
-      // If there's an old image, fade it out simultaneously
-      if (oldImg && oldImg.parentNode) {
-        oldImg.style.transition = 'opacity 100ms linear';
-        oldImg.style.opacity = '0';
-        
-        // Remove old image after transition
-        setTimeout(() => {
-          forceCleanupImage(oldImg);
-        }, 120); // Slightly longer than transition
-      }
-    });
-  }, [forceCleanupImage]);
-
-  const createAndLoadImage = useCallback((uri: string, onSuccess: (img: HTMLImageElement) => void, onError: () => void) => {
-    const img = document.createElement('img');
-    imageRefsSet.current.add(img);
-    
-    img.onload = () => {
-      onSuccess(img);
-    };
-    
-    img.onerror = () => {
-      forceCleanupImage(img);
-      onError();
-    };
-    img.src = uri;
-    return img;
-  }, [forceCleanupImage]);
-
-  const createInitialImage = useCallback((uri: string) => {
-    if (!containerRef.current) return;
-    
+    lastProcessedUriRef.current = uri;
+    isTransitioningRef.current = true;
     setIsLoading(true);
     
-    createAndLoadImage(
-      uri,
-      (img: HTMLImageElement) => {
-        if (containerRef.current) {
-          // Style the initial image
-          img.style.width = '100%';
-          img.style.height = '100%';
-          img.style.objectFit = 'contain';
-          img.style.position = 'absolute';
-          img.style.top = '0';
-          img.style.left = '0';
-          img.style.opacity = '1';
-          
-          containerRef.current.appendChild(img);
-          setDisplayUri(uri);
-          setHasInitialized(true);
-          setIsLoading(false);
-        }
-      },
-      () => {
-        console.error('Failed to load initial image:', uri);
-        setIsLoading(false);
-        // Don't set hasInitialized to true on error
+    // Clean up any pending image
+    if (pendingImageRef.current) {
+      destroyImage(pendingImageRef.current);
+      pendingImageRef.current = null;
+    }
+    
+    // Create new image
+    const newImg = document.createElement('img');
+    pendingImageRef.current = newImg;
+    
+    newImg.onload = () => {
+      if (!containerRef.current || pendingImageRef.current !== newImg) {
+        destroyImage(newImg);
+        return;
       }
-    );
-  }, [createAndLoadImage]);
-  useEffect(() => {
-    if (imageUri && !hasInitialized && containerRef.current) {
-      createInitialImage(imageUri);
-    }
-  }, [imageUri, hasInitialized, createInitialImage]);
-
-  // Handle subsequent image changes with crossfade
-  useEffect(() => {
-    if (imageUri && hasInitialized && imageUri !== displayUri && containerRef.current) {
-      setIsLoading(true);
-      const currentImg = containerRef.current.querySelector('img') as HTMLImageElement | null;
-      createAndLoadImage(
-        imageUri,
-        (newImg: HTMLImageElement) => {
-          // Success - perform crossfade
-          if (containerRef.current) {
-            performCrossfade(newImg, currentImg);
-            setDisplayUri(imageUri);
-            setIsLoading(false);
-          }
-        },
-        () => {
-          // Error
-          console.error('Failed to load image:', imageUri);
-          setIsLoading(false);
+      
+      // Style the new image
+      newImg.style.cssText = `
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        position: absolute;
+        top: 0;
+        left: 0;
+        opacity: 0;
+        transition: opacity 150ms ease-in-out;
+      `;
+      
+      // Add to container
+      containerRef.current.appendChild(newImg);
+      
+      // Get reference to old image before updating
+      const oldImg = currentImageRef.current;
+      currentImageRef.current = newImg;
+      pendingImageRef.current = null;
+      
+      // Force reflow
+      newImg.offsetHeight;
+      
+      // Fade in new image
+      const IMAGE_FADE = 800
+      requestAnimationFrame(() => {
+        newImg.style.opacity = '1';
+        
+        // Fade out old image simultaneously (if exists)
+        if (oldImg && oldImg.parentNode) {
+          oldImg.style.transition = `opacity ${IMAGE_FADE}ms ease-in-out`;
+          oldImg.style.opacity = '0';
         }
-      );
-    }
-  }, [imageUri, displayUri, hasInitialized, createAndLoadImage, performCrossfade]);
+        
+        setIsLoading(false);
+        isTransitioningRef.current = false;
+        setHasInitialized(true);
+      });
+      
+      // Clean up old image AFTER new one is fully visible
+      if (oldImg) {
+        setTimeout(() => {
+          destroyImage(oldImg);
+        }, IMAGE_FADE); // Wait for fade transition to complete
+      }
+    };
+    
+    newImg.onerror = () => {
+      console.error('Failed to load image');
+      destroyImage(newImg);
+      if (pendingImageRef.current === newImg) {
+        pendingImageRef.current = null;
+      }
+      setIsLoading(false);
+      isTransitioningRef.current = false;
+      lastProcessedUriRef.current = null; // Allow retry
+    };
+    
+    // Set src last to start loading
+    newImg.src = uri;
+  }, [isLoading, destroyImage]);
 
-  // CRITICAL: Cleanup on unmount
+  // Handle new frames
+  useEffect(() => {
+    if (imageUri && containerRef.current) {
+      loadNewFrame(imageUri);
+    }
+  }, [imageUri, loadNewFrame]);
+
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      cleanupAllImages();
+      destroyImage(currentImageRef.current);
+      destroyImage(pendingImageRef.current);
+      currentImageRef.current = null;
+      pendingImageRef.current = null;
     };
-  }, [cleanupAllImages]);
-
-  if (!imageUri) {
-    return (
-      <div style={styles.noVideoContainer}>
-        <img
-          src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMTMuMDkgOC4yNkwyMCA5TDEzLjA5IDE1Ljc0TDEyIDIyTDEwLjkxIDE1Tjc0TDQgOUwxMC45MSA4LjI2TDEyIDJaIiBmaWxsPSIjNjY2Ii8+Cjwvc3ZnPgo="
-          style={styles.placeholderIcon}
-          alt="placeholder"
-        />
-      </div>
-    );
-  }
+  }, [destroyImage]);
 
   return (
     <div 
@@ -191,13 +168,14 @@ export const CachedVideoPlayer: React.FC<CachedVideoPlayerProps> = ({ imageUri, 
       }} 
       ref={containerRef}
     >
-      {isLoading && (
+      {isLoading && !hasInitialized && (
         <div style={{
           position: 'absolute',
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
-          zIndex: 1
+          zIndex: 1,
+          color: '#666'
         }}>
           Loading...
         </div>

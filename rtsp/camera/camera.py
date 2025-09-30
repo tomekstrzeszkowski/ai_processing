@@ -13,29 +13,30 @@ load_dotenv()
 SHOW_NOW_LABEL = bool(os.getenv("SHOW_NOW_LABEL", ""))
 
 
-def process_frame(frame, detector):
-    height, width = frame.shape[:2]
-    scaled_frame = cv2.resize(
-        frame, (int(width * 0.99), int(height * 0.99))
-    )
-    detected_objects = 0
+def process_frame(frame, detector, is_motion_detected):
+    types_counted = 0
     type_detected = -1
-    for x0, y0, w, h, type_detected, scale in detector.detect_yolo_with_nms(scaled_frame):
-        cv2.rectangle(frame, (x0, y0), (x0 + w, y0 + h), (0, 255, 0), 1)
-        cv2.putText(
-            frame,
-            f"Detected {detector.yolo_class_id_to_verbose[type_detected]}!",
-            (x0+10, y0+20),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            (0, 255, 0),
-            2,
+    if is_motion_detected:
+        height, width = frame.shape[:2]
+        scaled_frame = cv2.resize(
+            frame, (int(width * 0.99), int(height * 0.99))
         )
-        detected_objects += 1
+        for x0, y0, w, h, type_detected, scale in detector.detect_yolo_with_nms(scaled_frame):
+            cv2.rectangle(frame, (x0, y0), (x0 + w, y0 + h), (0, 255, 0), 1)
+            cv2.putText(
+                frame,
+                f"Detected {detector.yolo_class_id_to_verbose[type_detected]}!",
+                (x0+10, y0+20),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (0, 255, 0),
+                2,
+            )
+            types_counted += 1
     now_label = datetime.now().strftime("%Y-%m-%d %H:%M:%S") if SHOW_NOW_LABEL else ""
     cv2.putText(
         frame, 
-        f"{now_label} objects: {detected_objects}", 
+        f"{now_label} detected: {types_counted}{'.' if is_motion_detected else ''}", 
         (20, 20), 
         cv2.FONT_HERSHEY_SIMPLEX, 
         0.7, 
@@ -94,18 +95,16 @@ def main():
         while True:
             frames_to_read, frame = video.read()
             frame_count += 1
-            
             if not frames_to_read:
                 print("Failed to grab frame")
                 break
 
             if frame_count % (skip_frames + 1) != 0:
                 continue
-            motion_detected, _ = next(motion.detect(frame), (False, tuple()))
-            if motion_detected or type_detected != -1:
-                frame, type_detected = process_frame(frame, detector)
-            
-            # Display frames
+            is_motion_detected, _ = next(motion.detect(frame), (False, tuple()))
+            frame, type_detected = process_frame(
+                frame, detector, is_motion_detected, type_detected
+            )
             if display_preview:
                 cv2.imshow('Processed', frame)
             processed_frame_bgr = cv2.cvtColor(np.array(frame), cv2.COLOR_RGB2BGR)
