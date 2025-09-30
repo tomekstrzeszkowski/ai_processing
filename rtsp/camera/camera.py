@@ -103,7 +103,7 @@ def main():
                 continue
             is_motion_detected, _ = next(motion.detect(frame), (False, tuple()))
             frame, type_detected = process_frame(
-                frame, detector, is_motion_detected, type_detected
+                frame, detector, is_motion_detected
             )
             if display_preview:
                 cv2.imshow('Processed', frame)
