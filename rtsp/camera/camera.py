@@ -103,7 +103,7 @@ def main():
                 continue
             motion_detected, _ = next(motion.detect(frame), (False, tuple()))
             if motion_detected or type_detected != -1:
-                frame, type_detected = process_frame(small_frame, detector)
+                frame, type_detected = process_frame(frame, detector)
             
             # Display frames
             if display_preview:
