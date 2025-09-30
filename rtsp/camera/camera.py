@@ -101,15 +101,14 @@ def main():
 
             if frame_count % (skip_frames + 1) != 0:
                 continue
-            motion_detected, _ = next(motion.detect(frame_array), (False, tuple()))
+            motion_detected, _ = next(motion.detect(frame), (False, tuple()))
             if motion_detected or type_detected != -1:
-                small_frame = cv2.resize(frame, (target_width, target_height))
-                processed_frame, type_detected = process_frame(small_frame, detector)
+                frame, type_detected = process_frame(small_frame, detector)
             
             # Display frames
             if display_preview:
-                cv2.imshow('Processed', processed_frame)
-            processed_frame_bgr = cv2.cvtColor(np.array(processed_frame), cv2.COLOR_RGB2BGR)
+                cv2.imshow('Processed', frame)
+            processed_frame_bgr = cv2.cvtColor(np.array(frame), cv2.COLOR_RGB2BGR)
             success, buffer = cv2.imencode('.jpg', processed_frame_bgr)
             if success:
                 write_frame_to_shared_memory(
