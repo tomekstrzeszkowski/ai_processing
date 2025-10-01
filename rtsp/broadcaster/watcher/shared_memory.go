@@ -191,7 +191,11 @@ func (smr *SharedMemoryReceiver) SaveFrameForLater() {
 	for detectedFrame := range smr.SignificantFrames {
 		year, month, day := time.Now().Date()
 		path := fmt.Sprintf("%s/%d-%02d-%02d", smr.savePath, year, month, day)
-		i, path := TouchDirAndGetIterator(path, saveChunkSize)
+		i, path, err := TouchDirAndGetIterator(path, saveChunkSize)
+		if err != nil {
+			log.Printf("Can save frame for later! %v", err)
+			return
+		}
 		if detectedFrame.Before != nil {
 			for _, frameBefore := range detectedFrame.Before.GetAll() {
 				SaveFrame(i, frameBefore, path)

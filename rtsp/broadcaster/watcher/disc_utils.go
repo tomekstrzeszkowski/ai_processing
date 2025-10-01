@@ -26,7 +26,7 @@ func DirSize(path string) (int64, error) {
 	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
 		if err != nil {
 			log.Printf(fmt.Sprintf("Error accessing file %s: %v", info.Name(), err))
-			panic(err)
+			return err
 		}
 		if !info.IsDir() {
 			stat, ok := info.Sys().(*syscall.Stat_t)
@@ -105,7 +105,7 @@ func GetDirsSortedByCreatedDesc(path string) ([]string, error) {
 	}
 	return names, nil
 }
-func TouchDirAndGetIterator(base_path string, size_limit int64) (int, string) {
+func TouchDirAndGetIterator(base_path string, size_limit int64) (int, string, error) {
 	dir_i := 1
 	names, err := GetDirsSortedByCreatedDesc(base_path)
 	if err != nil {
@@ -115,7 +115,7 @@ func TouchDirAndGetIterator(base_path string, size_limit int64) (int, string) {
 				panic(fmt.Sprintf("Cannot create directory: %v", err))
 			}
 		}
-		return dir_i, path
+		return dir_i, path, nil
 	}
 	if len(names) > 0 {
 		last_dir, _ := strconv.Atoi(names[0])
@@ -123,7 +123,10 @@ func TouchDirAndGetIterator(base_path string, size_limit int64) (int, string) {
 	}
 	path := filepath.Join(base_path, fmt.Sprintf("%d", dir_i))
 	for {
-		size, _ := DirSize(path)
+		size, err := DirSize(path)
+		if err != nil {
+			return -1, "", err
+		}
 		if size < size_limit {
 			break
 		}
@@ -145,7 +148,7 @@ func TouchDirAndGetIterator(base_path string, size_limit int64) (int, string) {
 		panic(fmt.Sprintf("Cannot get new file index: %v, %d", err, index))
 	}
 	fmt.Printf("Using path: %s, index: %d\n", path, index)
-	return index, path
+	return index, path, nil
 }
 func GetDateDirNames(base_path string, skipDirs []string) ([]string, error) {
 	dirs, err := os.ReadDir(base_path)
