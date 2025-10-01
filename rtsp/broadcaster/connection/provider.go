@@ -101,5 +101,9 @@ func (p *Provider) StartListening(ctx context.Context) {
 }
 
 func (p *Provider) BroadcastFrame(frame []byte) {
-	p.frameBuffer = append(p.frameBuffer, frame)
+	if len(p.frameBuffer) >= BufferCapacity {
+		p.frameBuffer = append(p.frameBuffer[1:], frame)
+	} else {
+		p.frameBuffer = append(p.frameBuffer, frame)
+	}
 }

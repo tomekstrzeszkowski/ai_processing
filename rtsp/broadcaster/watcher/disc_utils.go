@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"log"
 )
 
 func SaveFrame(i int, b []byte, path string) {
@@ -24,7 +25,8 @@ func DirSize(path string) (int64, error) {
 	var size int64
 	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
 		if err != nil {
-			panic(fmt.Sprintf("Error accessing file %s: %v", info.Name(), err))
+			log.Printf(fmt.Sprintf("Error accessing file %s: %v", info.Name(), err))
+			panic(err)
 		}
 		if !info.IsDir() {
 			stat, ok := info.Sys().(*syscall.Stat_t)
