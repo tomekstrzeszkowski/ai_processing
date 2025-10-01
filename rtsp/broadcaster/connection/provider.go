@@ -16,15 +16,16 @@ import (
 	"strzcam.com/broadcaster/video"
 )
 
+const BufferCapacity = 100
+
 type Provider struct {
 	host        host.Host
-	frame       []byte
 	frameBuffer [][]byte
 	path        string
 }
 
 func NewProvider(host host.Host, path string) *Provider {
-	return &Provider{host: host, path: path}
+	return &Provider{host: host, path: path, frameBuffer: make([][]byte, 0, BufferCapacity)}
 }
 
 func (p *Provider) HandleConnectedPeers() {
@@ -58,7 +59,7 @@ func (p *Provider) StartListening(ctx context.Context) {
 			stream.Write(frame)
 		}
 		stream.Close()
-		p.frameBuffer = [][]byte{}
+		p.frameBuffer = make([][]byte, 0, BufferCapacity)
 	})
 	p.host.SetStreamHandler("/get-video/1.0.0", func(stream network.Stream) {
 		defer stream.Close()
