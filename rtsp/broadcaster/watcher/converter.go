@@ -166,7 +166,10 @@ func (c *Converter) convertLastChunkToVideo(savePath string) bool {
 	c.convert(chunkPath)
 	err := os.RemoveAll(chunkPath)
 	if err != nil {
-		panic(fmt.Sprintf("Error removing chunk directory: %v\n", err))
+		// another gorouting is writing file to the channel
+		fmt.Printf("Error removing chunk directory: %v\n", err)
+		err := os.RemoveAll(chunkPath)
+		fmt.Printf("Re-try removing chunk directory: %v\n", err)
 	}
 	return true
 }

@@ -103,7 +103,7 @@ func (smr *SharedMemoryReceiver) readFrameFromShm() ([]byte, int, error) {
 func (smr *SharedMemoryReceiver) SendSignificantFrame(sf SignificantFrame) {
 	select {
 	case smr.SignificantFrames <- sf:
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(500 * time.Millisecond):
 		log.Printf("Timeout sending significant frame")
 	}
 }
@@ -116,6 +116,10 @@ func (smr *SharedMemoryReceiver) logStats(actualFps float64, frameLength int, de
 		beforeSize,
 		after,
 	)
+}
+func (smr *SharedMemoryReceiver) GetBaseDir() string {
+	year, month, day := time.Now().Date()
+	return fmt.Sprintf("%s/%d-%02d-%02d", smr.savePath, year, month, day)					
 }
 func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 	log.Println("Starting shared memory watcher...")
@@ -171,6 +175,10 @@ func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 						sf := SignificantFrame{Data: frameData, Detected: -1, Before: nil}
 						go smr.SendSignificantFrame(sf)
 					}
+					if after == 0 {
+						//create a new dir for next event
+						CreateNewDirIndex(smr.GetBaseDir())
+					}
 				}
 			}
 
@@ -189,11 +197,9 @@ func (smr *SharedMemoryReceiver) Close() {
 }
 func (smr *SharedMemoryReceiver) SaveFrameForLater() {
 	for detectedFrame := range smr.SignificantFrames {
-		year, month, day := time.Now().Date()
-		path := fmt.Sprintf("%s/%d-%02d-%02d", smr.savePath, year, month, day)
-		i, path, err := TouchDirAndGetIterator(path, saveChunkSize)
+		i, path, err := TouchDirAndGetIndex(smr.GetBaseDir(), saveChunkSize)
 		if err != nil {
-			log.Printf("Can save frame for later! %v", err)
+			log.Printf("Can not save frame for later! %v", err)
 			return
 		}
 		if detectedFrame.Before != nil {
