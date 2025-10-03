@@ -43,12 +43,15 @@ func main() {
 	    }
 	    if i < 9 {
 	    	// Exponential-ish backoff
+	    	log.Printf("Failed to make initial DHT announcement attempt %s", i)
 	        time.Sleep(time.Second * time.Duration((i+1)*1))
 	    }
 	}
 
 	if !announced {
 	    log.Printf("Failed to make initial DHT announcement after 10 attempts")
+	} else {
+		log.Printf("DHT announced!")
 	}
 	connection.AnnounceDHTPeriodically(ctx, kademliaDHT, rendezVous)
 
