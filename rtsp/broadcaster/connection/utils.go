@@ -176,32 +176,26 @@ func MakeBasicHost(listenPort int, insecure bool, randseed int64) (host.Host, er
 	}
 	return libp2p.New(opts...)
 }
-
-func AnnounceDHT(ctx context.Context, kademliaDHT *dht.IpfsDHT, rendezvous string) {
-	// Create a proper CID from the rendezvous string
-	hash := sha256.Sum256([]byte(rendezvous))
-	mh, _ := multihash.EncodeName(hash[:], "sha2-256")
-	rendezvousBytes := cid.NewCidV1(cid.Raw, mh)
-	// Wait for DHT to be ready
-	time.Sleep(5 * time.Second)
-	fmt.Printf("Announcing on DHT with rendezvous: %s\n", rendezvous)
-
-	// Announce ourselves as a provider for this rendezvous
-	err := kademliaDHT.Provide(ctx, rendezvousBytes, true)
-	if err != nil {
-		fmt.Printf("Failed to announce on DHT: %v\n", err)
-	} else {
-		fmt.Println("Successfully announced on DHT!")
-	}
-
-	// Keep announcing periodically
+func GetRendezVousCid(rendezvous string) (cid.Cid, error) {
+    hash := sha256.Sum256([]byte(rendezvous))
+    mh, err := multihash.EncodeName(hash[:], "sha2-256")
+    if err != nil {
+        return cid.Cid{}, err
+    }
+    return cid.NewCidV1(cid.Raw, mh), nil
+}
+func AnnounceDHT(ctx context.Context, kademliaDHT *dht.IpfsDHT, rendezVous cid.Cid) bool {
+	err := kademliaDHT.Provide(ctx, rendezVous, true)
+	return err == nil
+}
+func AnnounceDHTPeriodically(ctx context.Context, kademliaDHT *dht.IpfsDHT, rendezVous cid.Cid) {
 	ticker := time.NewTicker(10 * time.Minute)
 	defer ticker.Stop()
 	go func() {
 		for {
 			select {
 			case <-ticker.C:
-				err := kademliaDHT.Provide(ctx, rendezvousBytes, true)
+				err := kademliaDHT.Provide(ctx, rendezVous, true)
 				if err != nil {
 					fmt.Printf("Failed to re-announce on DHT: %v\n", err)
 				} else {

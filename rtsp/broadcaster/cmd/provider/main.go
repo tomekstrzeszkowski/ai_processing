@@ -8,6 +8,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"strzcam.com/broadcaster/connection"
 	"strzcam.com/broadcaster/watcher"
+	"log"
+	"time"
 )
 
 func main() {
@@ -26,14 +28,29 @@ func main() {
 	golog.SetAllLoggers(golog.LevelError)
 
 	host, kademliaDHT, _ := connection.MakeEnhancedHost(ctx, 10000, false, 0)
-	//host, _ := connection.MakeBasicHost(10000, false, 0)
 	defer host.Close()
 	defer kademliaDHT.Close()
 
 	Provider := connection.NewProvider(host, savePath)
 	Provider.StartListening(ctx)
 	Provider.HandleConnectedPeers()
-	connection.AnnounceDHT(ctx, kademliaDHT, connection.RendezVous)
+	rendezVous, _ := connection.GetRendezVousCid(connection.RendezVous)
+	announced := false
+	for i := range 10 {
+	    if connection.AnnounceDHT(ctx, kademliaDHT, rendezVous) {
+	        announced = true
+	        break
+	    }
+	    if i < 9 {
+	    	// Exponential-ish backoff
+	        time.Sleep(time.Second * time.Duration((i+1)*1))
+	    }
+	}
+
+	if !announced {
+	    log.Printf("Failed to make initial DHT announcement after 10 attempts")
+	}
+	connection.AnnounceDHTPeriodically(ctx, kademliaDHT, rendezVous)
 
 	go func() {
 		for frame := range creator.SharedMemoryReceiver.Frames {
@@ -46,9 +63,9 @@ func main() {
 		var peer peer.AddrInfo
 		select {
 		case peer = <-mdnsPeerChan:
-			fmt.Println("Found peer via MDNS:", peer)
+			log.Println("Found peer via MDNS:", peer)
 		case peer = <-dhtPeerChan:
-			fmt.Println("Found peer via DHT:", peer)
+			log.Println("Found peer via DHT:", peer)
 		case <-ctx.Done():
 			return
 		}
