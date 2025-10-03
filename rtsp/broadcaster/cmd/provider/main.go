@@ -43,8 +43,8 @@ func main() {
 	    }
 	    if i < 9 {
 	    	// Exponential-ish backoff
-	    	log.Printf("Failed to make initial DHT announcement attempt %s", i)
-	        time.Sleep(time.Second * time.Duration((i+1)*1))
+	    	log.Printf("Failed to make initial DHT announcement attempt %d", i)
+	        time.Sleep(time.Second * time.Duration((i+1)*i))
 	    }
 	}
 
