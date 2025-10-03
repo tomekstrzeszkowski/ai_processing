@@ -4,7 +4,7 @@ from collections import deque
 
 
 class MotionDetector:
-    HISTORY_TICKS = int(30 * 0.5)
+    HISTORY_TICKS = int(30 * 2)
     history = deque([False] * HISTORY_TICKS, maxlen=HISTORY_TICKS)
 
     def __init__(self, min_area=500, threshold=25):
@@ -35,5 +35,6 @@ class MotionDetector:
 
     def detected_long(self, frame):
         is_motion_detected, _ = next(self.detect(frame), (False, tuple()))
+        is_active_move = all(self.history)
         self.history.append(is_motion_detected)
-        return all(self.history)
+        return any(self.history) if is_active_move else all(self.history)
