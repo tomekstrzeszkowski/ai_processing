@@ -5,6 +5,6 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 COPY . .
-EXPOSE 8081 19000 19001 19002
+EXPOSE 7081 19000 19001 19002
 RUN npm install -g expo-cli
-CMD ["npx", "expo", "start", "--web"]
+CMD ["npx", "expo", "start", "--web", "--port", "7081"]

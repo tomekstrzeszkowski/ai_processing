@@ -22,8 +22,8 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
   const wsRef = useRef(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const host = document.location.hostname || 'localhost';
-  const [serverUrl, ] = useState(`ws://${host}:8080/ws`);
-  const [httpServerUrl, ] = useState(`http://${host}:8080`);
+  const [serverUrl, ] = useState(`ws://${host}:7080/ws`);
+  const [httpServerUrl, ] = useState(`http://${host}:7080`);
 
   const value = {wsRef, isConnecting, setIsConnecting, serverUrl, httpServerUrl};
   return (

@@ -17,7 +17,7 @@ COPY --from=builder /app/bin/video_creator ./bin/video_creator
 COPY --from=builder /app/bin/server ./bin/server
 COPY --from=builder /go/bin/dlv /
 
-EXPOSE 8071 8072 2345
+EXPOSE 7071 7072 2345
 
 ENTRYPOINT []
 CMD ["./bin/provider"]

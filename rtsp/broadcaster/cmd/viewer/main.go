@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	server, _ := watcher.NewServer(8080)
+	server, _ := watcher.NewServer(7080)
 	server.PrepareEndpoints()
 	go server.Start()
 

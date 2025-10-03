@@ -7,7 +7,7 @@ func main() {
 	defer memory.Close()
 	go memory.WatchSharedMemory()
 	go memory.SaveFrameForLater()
-	server, _ := watcher.NewServer(8071)
+	server, _ := watcher.NewServer(7071)
 
 	server.PrepareEndpoints()
 	go func() {

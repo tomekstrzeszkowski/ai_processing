@@ -15,7 +15,7 @@ func main() {
 	go creator.SaveFramesForLater()
 	go creator.StartConversionWorkflow(&memory.ActualFps)
 
-	server, _ := watcher.NewServer(8072)
+	server, _ := watcher.NewServer(7072)
 	server.PrepareEndpoints()
 	go func() {
 		for frame := range creator.SharedMemoryReceiver.Frames {

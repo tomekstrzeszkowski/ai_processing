@@ -7,6 +7,7 @@ from yolo_object import YoloObject, YOLO_MODEL_NAME_TO_SCALE_TO_ORIGINAL
 from detector import Detector
 from motion import MotionDetector
 from face import FaceDetector
+from fps import FpsMonitor
 from dotenv import load_dotenv
 from saver import write_frame_to_shared_memory
 from datetime import datetime
@@ -40,23 +41,24 @@ if __name__ == "__main__":
     length = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
     width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = video.get(cv2.CAP_PROP_FPS)
+    camera_fps = video.get(cv2.CAP_PROP_FPS)
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     filename_chunks = file_name.split(".")
     processed_name = (
         f"{'_'.join([*filename_chunks[:1], 'processed'])}.{filename_chunks[-1]}"
     )
-    video_tracked = cv2.VideoWriter(processed_name, fourcc, fps, (width, height))
-    i = 0
+    video_tracked = cv2.VideoWriter(processed_name, fourcc, camera_fps, (width, height))
     yolo_object_to_verbose = {y.value: y.name for y in YoloObject}
     type_detected = -1
+    fps = FpsMonitor()
+    fps.start()
+    frame_count = 0
     while frames_to_read := True:
-        i += 1
         frames_to_read, frame = video.read()
         if not frames_to_read:
             break
+        fps.update_frame_count()
         frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        print(f"{i}/{length}")
         frame_array = np.array(frame)
         # scale for faster detections
         frame_array = cv2.resize(
@@ -64,9 +66,9 @@ if __name__ == "__main__":
         )
         draw = ImageDraw.Draw(frame)
         # detect
-        motion_detected, _ = next(motion.detect(frame_array), (False, tuple()))
+        motion_detected = motion.detected_long(frame_array)
         detected = 0
-        if motion_detected or type_detected != -1:
+        if motion_detected:
             type_detected = -1
             for x0, y0, w, h, type_detected, scale in detector.detect_yolo_with_largest_box(frame_array):
                 detected += 1
@@ -110,5 +112,9 @@ if __name__ == "__main__":
             )
         frame_bgr = cv2.resize(frame_bgr, (width, height))
         video_tracked.write(frame_bgr)
+        frame_count += 1
+        actual_fps = fps.update_elapsed_time()
+        if actual_fps:
+            print(f"{actual_fps=:.2f} -> {frame_count}/{length}")
     video.release()
     video_tracked.release()

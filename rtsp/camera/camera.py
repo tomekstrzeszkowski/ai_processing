@@ -8,6 +8,7 @@ from motion import MotionDetector
 from dotenv import load_dotenv
 from saver import write_frame_to_shared_memory
 from datetime import datetime
+from fps import FpsMonitor
 
 load_dotenv()
 SHOW_NOW_LABEL = bool(os.getenv("SHOW_NOW_LABEL", ""))
@@ -74,18 +75,18 @@ def main():
         return
 
     # Get camera properties
-    fps = video.get(cv2.CAP_PROP_FPS)
+    camera_fps = video.get(cv2.CAP_PROP_FPS)
     width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH) / 8)
     height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT) / 8)
 
-    print(f"Camera properties: {width}x{height} @ {fps} FPS")
+    print(f"Camera properties: {width=}x{height=} @ {camera_fps=}")
 
     # Performance tracking
     frame_count = 0
-    start_time = time.time()
+    fps = FpsMonitor()
+    fps.start()
 
     # optimize
-    skip_frames = int(os.getenv("SKIP_FRAMES", "10"))
     target_width = int(width * 4)
     target_height = int(height * 4)
     video.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
@@ -95,12 +96,11 @@ def main():
     try:
         while True:
             frames_to_read, frame = video.read()
-            frame_count += 1
             if not frames_to_read:
                 print("Failed to grab frame")
                 break
-
-            if frame_count % (skip_frames + 1) != 0:
+            fps.update_frame_count()
+            if fps.is_skip_frame():
                 continue
             is_motion_detected = motion.detected_long(frame)
             frame, type_detected = process_frame(frame, detector, is_motion_detected)
@@ -113,13 +113,9 @@ def main():
                     buffer, type_detected, shm_name=f"video_frame"
                 )
                 del buffer
-            elapsed_time = time.time() - start_time
-            if elapsed_time > 1.0:  # Update every second
-                actual_fps = frame_count / elapsed_time
-                print(f"Actual FPS: {actual_fps:.2f}")
-                frame_count = 0
-                start_time = time.time()
-
+            actual_fps = fps.update_elapsed_time()
+            if actual_fps:
+                print(f"{actual_fps=:.2f}")
             if not display_preview:
                 continue
             # Break on 'q' key press

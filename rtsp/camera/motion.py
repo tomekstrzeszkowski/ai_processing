@@ -1,10 +1,14 @@
 import cv2
 import numpy as np
 from collections import deque
+from dotenv import load_dotenv
+import os
 
+
+load_dotenv()
 
 class MotionDetector:
-    HISTORY_TICKS = int(30 * 2)
+    HISTORY_TICKS = int(os.getenv("HISTORY_TICKS", "120"))
     history = deque([False] * HISTORY_TICKS, maxlen=HISTORY_TICKS)
 
     def __init__(self, min_area=500, threshold=25):
