@@ -4,7 +4,7 @@ from collections import deque
 
 
 class MotionDetector:
-    HISTORY_TICKS = 30 * 0.5
+    HISTORY_TICKS = int(30 * 0.5)
     history = deque([False] * HISTORY_TICKS, maxlen=HISTORY_TICKS)
 
     def __init__(self, min_area=500, threshold=25):
