@@ -8,14 +8,27 @@ import os
 load_dotenv()
 
 class MotionDetector:
-    HISTORY_TICKS = int(os.getenv("HISTORY_TICKS", "120"))
-    history = deque([False] * HISTORY_TICKS, maxlen=HISTORY_TICKS)
+    history_ticks = int(os.getenv("HISTORY_TICKS", "120"))
+    history = deque([False] * history_ticks, maxlen=history_ticks)
+    is_active_move = False
 
-    def __init__(self, min_area=500, threshold=25):
+    def __init__(self, min_area: int=500, threshold: int=25):
         self.min_area = min_area
         self.background_subtractor = cv2.createBackgroundSubtractorMOG2(
             history=500, varThreshold=threshold, detectShadows=False
         )
+
+    def resize_history(self, new_size: int) -> None:
+        if new_size == self.history_ticks:
+            return
+        if self.history_ticks > new_size:
+            # Trim from the left, keeping the most recent items
+            for _ in range(self.history_ticks - new_size):
+                self.history.popleft()
+        else:
+            # Pad on the left
+            self.history.extendleft([self.is_active_move] * (new_size - self.history_ticks))
+        self.history_ticks = new_size
 
     def detect(self, frame):
         fg_mask = self.background_subtractor.apply(frame)
@@ -37,8 +50,13 @@ class MotionDetector:
             x, y, w, h = cv2.boundingRect(contour)
             yield True, (x, y, w, h)
 
-    def detected_long(self, frame):
+    def detected_long(self, frame) -> bool:
+        """Detect move and minimalize random state change."""
         is_motion_detected, _ = next(self.detect(frame), (False, tuple()))
-        is_active_move = all(self.history)
         self.history.append(is_motion_detected)
-        return any(self.history) if is_active_move else all(self.history)
+        active_move = any(self.history) if self.is_active_move else all(self.history)
+        if active_move and not self.is_active_move:
+            self.is_active_move = True
+        if not active_move and self.is_active_move:
+            self.is_active_move = False
+        return active_move
