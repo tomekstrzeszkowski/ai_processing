@@ -78,43 +78,36 @@ def main():
     camera_fps = video.get(cv2.CAP_PROP_FPS)
     width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH) / 8)
     height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT) / 8)
-
-    print(f"Camera properties: {width=}x{height=} @ {camera_fps=}")
-
-    # Performance tracking
-    frame_count = 0
-    fps = FpsMonitor()
-    fps.start()
-
-    # optimize
-    target_width = int(width * 4)
-    target_height = int(height * 4)
     video.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     video.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
     video.set(cv2.CAP_PROP_FPS, 3)
-    type_detected = -1
+
+    print(f"Camera properties: {width=}x{height=} @ {camera_fps=}")
+    frame_count = 0
+    fps = FpsMonitor()
+    fps.start()
     try:
         while True:
-            frames_to_read, frame = video.read()
+            frames_to_read, camera_frame = video.read()
             if not frames_to_read:
                 print("Failed to grab frame")
-                break
+                continue
             fps.update_frame_count()
             if fps.is_skip_frame():
                 continue
-            is_motion_detected = motion.detected_long(frame)
-            frame, type_detected = process_frame(frame, detector, is_motion_detected)
+            is_motion_detected = motion.detected_long(camera_frame)
+            frame, type_detected = process_frame(
+                camera_frame, detector, is_motion_detected
+            )
             if display_preview:
                 cv2.imshow("Processed", frame)
-            processed_frame_bgr = cv2.cvtColor(np.array(frame), cv2.COLOR_RGB2BGR)
-            success, buffer = cv2.imencode(".jpg", processed_frame_bgr)
+            success, buffer = cv2.imencode(".jpg", frame)
             if success:
                 write_frame_to_shared_memory(
                     buffer, type_detected, shm_name=f"video_frame"
                 )
                 del buffer
-            actual_fps = fps.update_elapsed_time()
-            if actual_fps:
+            if actual_fps := fps.update_elapsed_time():
                 print(f"{actual_fps=:.2f}")
             if not display_preview:
                 continue
@@ -123,7 +116,6 @@ def main():
             if key == ord("q"):
                 break
             elif key == ord("s"):
-                # Save current frame
                 timestamp = int(time.time())
                 cv2.imwrite(f"videotured_frame_{timestamp}.jpg", frame)
                 print(f"[{timestamp}] Frame saved as video_frame.jpg")
