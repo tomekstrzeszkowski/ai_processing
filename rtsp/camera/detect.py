@@ -9,7 +9,7 @@ from motion import MotionDetector
 from face import FaceDetector
 from fps import FpsMonitor
 from dotenv import load_dotenv
-from saver import write_frame_to_shared_memory
+from saver import write_frame_to_shared_memory, VideoSaver
 from datetime import datetime
 
 
@@ -30,6 +30,8 @@ def make_ellipse_mask(size, box, ellipse_blur=10):
 
 if __name__ == "__main__":
     BLUR_FACES = False
+    SAVE_TO_SHM = bool(os.getenv("SAVE_TO_SHM", ""))
+    SAVE_VIDEO = bool(os.getenv("SAVE_VIDEO", ""))
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     # face detector
     face = FaceDetector(device)
@@ -42,12 +44,11 @@ if __name__ == "__main__":
     width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
     camera_fps = video.get(cv2.CAP_PROP_FPS)
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     filename_chunks = file_name.split(".")
     processed_name = (
         f"{'_'.join([*filename_chunks[:1], 'processed'])}.{filename_chunks[-1]}"
     )
-    video_tracked = cv2.VideoWriter(processed_name, fourcc, camera_fps, (width, height))
+    video_tracked = VideoSaver(camera_fps, width, height, processed_name)
     yolo_object_to_verbose = {y.value: y.name for y in YoloObject}
     type_detected = -1
     fps = FpsMonitor()
@@ -70,7 +71,14 @@ if __name__ == "__main__":
         detected = 0
         if motion_detected:
             type_detected = -1
-            for x0, y0, w, h, type_detected, scale in detector.detect_yolo_with_largest_box(frame_array):
+            for (
+                x0,
+                y0,
+                w,
+                h,
+                type_detected,
+                scale,
+            ) in detector.detect_yolo_with_largest_box(frame_array):
                 detected += 1
                 cv2.rectangle(frame_array, (x0, y0), (x0 + w, y0 + h), (0, 255, 0), 2)
                 cv2.putText(
@@ -82,7 +90,9 @@ if __name__ == "__main__":
                     (255, 255, 255),
                     2,
                 )
-        now_label = datetime.now().strftime("%Y-%m-%d %H:%M:%S") if SHOW_NOW_LABEL else ""
+        now_label = (
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S") if SHOW_NOW_LABEL else ""
+        )
         cv2.putText(
             frame_array,
             f"{now_label} {detected=}{'.' if motion_detected else ''}",
@@ -105,16 +115,16 @@ if __name__ == "__main__":
                 frame_draw.paste(blurred, mask=mask_box)
                 draw.rectangle(face.tolist(), outline="red")
         frame_bgr = cv2.cvtColor(np.array(frame_draw), cv2.COLOR_RGB2BGR)
-        success, buffer = cv2.imencode('.jpg', frame_bgr)
-        if success:
-            write_frame_to_shared_memory(
-                buffer, type_detected, shm_name=f"video_frame"
-            )
-        frame_bgr = cv2.resize(frame_bgr, (width, height))
-        video_tracked.write(frame_bgr)
+        if SAVE_TO_SHM:
+            success, buffer = cv2.imencode(".jpg", frame_bgr)
+            if success:
+                write_frame_to_shared_memory(
+                    buffer, type_detected, shm_name=f"video_frame"
+                )
+        video_tracked.add_frame(cv2.resize(frame_bgr, (width, height)))
         frame_count += 1
         actual_fps = fps.update_elapsed_time()
         if actual_fps:
             print(f"{actual_fps=:.2f} -> {frame_count}/{length}")
     video.release()
-    video_tracked.release()
+    video_tracked.save()

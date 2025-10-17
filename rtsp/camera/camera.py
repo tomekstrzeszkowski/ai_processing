@@ -6,7 +6,7 @@ import re
 from detector import Detector
 from motion import MotionDetector
 from dotenv import load_dotenv
-from saver import write_frame_to_shared_memory
+from saver import write_frame_to_shared_memory, VideoSaver
 from datetime import datetime
 from fps import FpsMonitor
 
@@ -50,6 +50,8 @@ def process_frame(frame, detector, is_motion_detected):
 def main():
     url = os.getenv("IP_CAM_URL", "copy .env.template")
     display_preview = bool(os.getenv("DISPLAY_PREVIEW", ""))
+    SAVE_TO_SHM = bool(os.getenv("SAVE_TO_SHM", ""))
+    SAVE_VIDEO = bool(os.getenv("SAVE_VIDEO", ""))
     detector = Detector()
     motion = MotionDetector(min_area=500, threshold=25)
     url_clean = re.sub(r"(rtsp:\/\/.+:)(.+)@", r"\1***@", url)
@@ -81,7 +83,7 @@ def main():
     video.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     video.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
     video.set(cv2.CAP_PROP_FPS, 3)
-
+    video_tracked = None
     print(f"Camera properties: {width=}x{height=} @ {camera_fps=}")
     frame_count = 0
     fps = FpsMonitor()
@@ -99,16 +101,28 @@ def main():
             frame, type_detected = process_frame(
                 camera_frame, detector, is_motion_detected
             )
-            if display_preview:
-                cv2.imshow("Processed", frame)
-            success, buffer = cv2.imencode(".jpg", frame)
-            if success:
-                write_frame_to_shared_memory(
-                    buffer, type_detected, shm_name=f"video_frame"
-                )
-                del buffer
             if actual_fps := fps.update_elapsed_time():
                 print(f"{actual_fps=:.2f}")
+            if display_preview:
+                cv2.imshow("Processed", frame)
+            if SAVE_TO_SHM:
+                success, buffer = cv2.imencode(".jpg", frame)
+                if success:
+                    write_frame_to_shared_memory(
+                        buffer, type_detected, shm_name=f"video_frame"
+                    )
+                del buffer
+            if SAVE_VIDEO:
+                print(type_detected, is_motion_detected)
+                if type_detected != -1 or is_motion_detected:
+                    if not video_tracked:
+                        video_tracked = VideoSaver(
+                            actual_fps - fps.skip_frames, width, height
+                        )
+                    video_tracked.add_frame(cv2.resize(frame, (width, height)))
+                elif video_tracked:
+                    video_tracked.save()
+                    video_tracked = None
             if not display_preview:
                 continue
             # Break on 'q' key press
