@@ -115,6 +115,7 @@ if __name__ == "__main__":
                 frame_draw.paste(blurred, mask=mask_box)
                 draw.rectangle(face.tolist(), outline="red")
         frame_bgr = cv2.cvtColor(np.array(frame_draw), cv2.COLOR_RGB2BGR)
+        fps.mark_processed()
         if SAVE_TO_SHM:
             success, buffer = cv2.imencode(".jpg", frame_bgr)
             if success:
@@ -123,8 +124,7 @@ if __name__ == "__main__":
                 )
         video_tracked.add_frame(cv2.resize(frame_bgr, (width, height)))
         frame_count += 1
-        actual_fps = fps.update_elapsed_time()
-        if actual_fps:
-            print(f"{actual_fps=:.2f} -> {frame_count}/{length}")
+        if fps.update_elapsed_time():
+            print(f"{fps.get_current()=:.2f} -> {frame_count}/{length}")
     video.release()
     video_tracked.save()

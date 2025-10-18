@@ -35,15 +35,16 @@ def process_frame(frame, detector, is_motion_detected):
             )
             types_counted += 1
     now_label = datetime.now().strftime("%Y-%m-%d %H:%M:%S") if SHOW_NOW_LABEL else ""
-    cv2.putText(
-        frame,
-        f"{now_label} detected: {types_counted}{'.' if is_motion_detected else ''}",
-        (20, 20),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.7,
-        (255, 255, 255),
-        2,
-    )
+    for bold, color in ((8, (0, 0, 0)), (4, (255, 255, 255))):
+        cv2.putText(
+            frame,
+            f"{now_label} {types_counted}{'.' if is_motion_detected else ''}",
+            (100, 100),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1.5,
+            color,
+            bold,
+        )
     return frame, type_detected
 
 
@@ -78,15 +79,15 @@ def main():
 
     # Get camera properties
     camera_fps = video.get(cv2.CAP_PROP_FPS)
-    width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH) / 8)
-    height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT) / 8)
+    width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH) / 2)
+    height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT) / 2)
     video.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     video.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
     video.set(cv2.CAP_PROP_FPS, 3)
     video_tracked = None
     print(f"Camera properties: {width=}x{height=} @ {camera_fps=}")
-    frame_count = 0
-    fps = FpsMonitor()
+    has_detected = False
+    fps = FpsMonitor(camera_fps)
     fps.start()
     try:
         while True:
@@ -101,8 +102,9 @@ def main():
             frame, type_detected = process_frame(
                 camera_frame, detector, is_motion_detected
             )
-            if actual_fps := fps.update_elapsed_time():
-                print(f"{actual_fps=:.2f}")
+            fps.mark_processed()
+            if fps.update_elapsed_time():
+                print(f"{fps.get_current()=:.2f}", end="\r", flush=True)
             if display_preview:
                 cv2.imshow("Processed", frame)
             if SAVE_TO_SHM:
@@ -113,16 +115,23 @@ def main():
                     )
                 del buffer
             if SAVE_VIDEO:
-                print(type_detected, is_motion_detected)
-                if type_detected != -1 or is_motion_detected:
+                found_object = type_detected != -1
+                has_detected = found_object or has_detected
+                if found_object or is_motion_detected:
                     if not video_tracked:
                         video_tracked = VideoSaver(
-                            actual_fps - fps.skip_frames, width, height
+                            fps.get_current(),
+                            width,
+                            height,
                         )
                     video_tracked.add_frame(cv2.resize(frame, (width, height)))
                 elif video_tracked:
-                    video_tracked.save()
+                    if has_detected:
+                        video_tracked.save()
+                    else:
+                        video_tracked.remove()
                     video_tracked = None
+                    has_detected = False
             if not display_preview:
                 continue
             # Break on 'q' key press

@@ -22,6 +22,7 @@ def write_frame_to_shared_memory(buffer, type_, shm_name="video_frame"):
 
 class VideoSaver:
     video = None
+    name = ""
 
     def __init__(self, camera_fps, width, height, file_name=""):
         if not file_name:
@@ -29,9 +30,13 @@ class VideoSaver:
         self.video = cv2.VideoWriter(
             file_name, cv2.VideoWriter_fourcc(*"mp4v"), camera_fps, (width, height)
         )
+        self.name = file_name
 
     def add_frame(self, frame):
         self.video.write(frame)
 
     def save(self):
         self.video.release()
+
+    def remove(self):
+        os.remove(self.name)
