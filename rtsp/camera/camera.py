@@ -9,42 +9,23 @@ from dotenv import load_dotenv
 from saver import write_frame_to_shared_memory, VideoSaver
 from datetime import datetime
 from fps import FpsMonitor
+from drawer import Drawer
 
 load_dotenv()
 SHOW_NOW_LABEL = bool(os.getenv("SHOW_NOW_LABEL", ""))
 
 
 def process_frame(frame, detector, is_motion_detected):
-    types_counted = 0
     type_detected = -1
+    drawer = Drawer(frame)
     if is_motion_detected:
         height, width = frame.shape[:2]
         scaled_frame = cv2.resize(frame, (int(width * 0.99), int(height * 0.99)))
         for x0, y0, w, h, type_detected, scale in detector.detect_yolo_with_nms(
             scaled_frame
         ):
-            cv2.rectangle(frame, (x0, y0), (x0 + w, y0 + h), (0, 255, 0), 1)
-            cv2.putText(
-                frame,
-                f"Detected {detector.yolo_class_id_to_verbose[type_detected]}!",
-                (x0 + 10, y0 + 20),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                (0, 255, 0),
-                2,
-            )
-            types_counted += 1
-    now_label = datetime.now().strftime("%Y-%m-%d %H:%M:%S") if SHOW_NOW_LABEL else ""
-    for bold, color in ((8, (0, 0, 0)), (4, (255, 255, 255))):
-        cv2.putText(
-            frame,
-            f"{now_label} {types_counted}{'.' if is_motion_detected else ''}",
-            (100, 100),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1.5,
-            color,
-            bold,
-        )
+            drawer.rectangle(detector.yolo_class_id_to_verbose[type_detected], x0, y0, w, h)
+    drawer.label(is_motion_detected)
     return frame, type_detected
 
 

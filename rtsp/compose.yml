@@ -26,6 +26,7 @@ services:
       dockerfile: ./Dockerfile
     volumes:
       - shared_memory:/dev/shm
+      - ./camera:/app
     shm_size: 256m
     tmpfs:
       - /shared:size=256m

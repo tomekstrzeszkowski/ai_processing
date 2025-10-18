@@ -4,3 +4,4 @@ services:
   camera:
     devices:
      - /dev/video0:/dev/video0  # add phisical device
+    command: "python camera.py"  # use camera

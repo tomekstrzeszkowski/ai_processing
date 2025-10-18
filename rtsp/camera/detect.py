@@ -10,6 +10,7 @@ from face import FaceDetector
 from fps import FpsMonitor
 from dotenv import load_dotenv
 from saver import write_frame_to_shared_memory, VideoSaver
+from drawer import Drawer
 from datetime import datetime
 
 
@@ -17,15 +18,6 @@ load_dotenv()
 
 SHOW_NOW_LABEL = bool(os.getenv("SHOW_NOW_LABEL", ""))
 file_name = "video.mp4"
-
-
-def make_ellipse_mask(size, box, ellipse_blur=10):
-    mask = Image.new("L", size, color=0)
-    draw = ImageDraw.Draw(mask)
-    x0, y0, x1, y1 = box.tolist()
-    ellipse_size = [x0 * 0.95, y0 * 0.95, x1 * 1.05, y1 * 1.05]
-    draw.ellipse(ellipse_size, fill=255)
-    return mask.filter(ImageFilter.GaussianBlur(radius=ellipse_blur))
 
 
 if __name__ == "__main__":
@@ -68,7 +60,7 @@ if __name__ == "__main__":
         draw = ImageDraw.Draw(frame)
         # detect
         motion_detected = motion.detected_long(frame_array)
-        detected = 0
+        drawer = Drawer(frame_array)
         if motion_detected:
             type_detected = -1
             for (
@@ -79,30 +71,9 @@ if __name__ == "__main__":
                 type_detected,
                 scale,
             ) in detector.detect_yolo_with_largest_box(frame_array):
-                detected += 1
-                cv2.rectangle(frame_array, (x0, y0), (x0 + w, y0 + h), (0, 255, 0), 2)
-                cv2.putText(
-                    frame_array,
-                    f"Detected {yolo_object_to_verbose[type_detected]}",
-                    (x0, y0),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.7,
-                    (255, 255, 255),
-                    2,
-                )
-        now_label = (
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S") if SHOW_NOW_LABEL else ""
-        )
-        cv2.putText(
-            frame_array,
-            f"{now_label} {detected=}{'.' if motion_detected else ''}",
-            (20, 20),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (255, 255, 255),
-            2,
-        )
-        frame_draw = Image.fromarray(frame_array)
+                drawer.rectangle(yolo_object_to_verbose[type_detected], x0, y0, w, h)
+        drawer.label(motion_detected)
+        frame_draw = drawer.get_from_array()
 
         # detect faces
         if BLUR_FACES:
