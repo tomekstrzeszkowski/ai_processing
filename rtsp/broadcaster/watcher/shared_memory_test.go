@@ -75,7 +75,7 @@ func TestSharedMemory(t *testing.T) {
 		if err != nil {
 			t.Fatal("Failed to create SharedMemoryReceiver:", err)
 		}
-		_, i, err := receiver.readFrameFromShm()
+		_, i, err := receiver.ReadFrameFromShm()
 		if i != -1 {
 			t.Error("Expected index -1 when no shared memory file exists, got:", i)
 		}
@@ -92,7 +92,7 @@ func TestSharedMemory(t *testing.T) {
 		defer os.Remove("/dev/shm/test_shm")
 		receiver, _ := NewSharedMemoryReceiverWithConfig("test_shm", configProvider)
 		defer receiver.Close()
-		frame, detected, err := receiver.readFrameFromShm()
+		frame, detected, err := receiver.ReadFrameFromShm()
 		if err != nil {
 			t.Fatal("Failed to read frame from shared memory:", err)
 		}

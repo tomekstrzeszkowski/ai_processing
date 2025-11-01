@@ -85,7 +85,7 @@ def main():
             )
             fps.mark_processed()
             if fps.update_elapsed_time():
-                print(f"{fps.get_current()=:.2f}", end="\r", flush=True)
+                print(f"{fps.get_current()=:.2f}")
             if display_preview:
                 cv2.imshow("Processed", frame)
             if SAVE_TO_SHM:

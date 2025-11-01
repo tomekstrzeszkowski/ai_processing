@@ -20,11 +20,18 @@ go build -o ./bin/viewer ./cmd/viewer/main.go
 
 ## WebRTC
 
-**Still in progress**. Sending frames works via WS. WebRTC part still needs some work.
+### Signaling server
 
 ```
-go build -o ./bin/webrtc ./cmd/webRTC/main.go
+go build -o ./bin/web_rtc/signaling ./cmd/web_rtc_server/signaling.go
 ```
+
+### Offeror
+
+```
+go build -o ./bin/web_rtc/offeror ./cmd/web_rtc_offeror/offeror.go
+```
+
 
 ## Video creator
 
