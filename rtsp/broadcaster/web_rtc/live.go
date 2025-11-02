@@ -61,6 +61,7 @@ type Message struct {
 type VideoTrack struct {
 	track      *webrtc.TrackLocalStaticSample
 	encoder    codec.ReadCloser
+	reader     *frameReader
 	frameCount int
 	mu         sync.Mutex
 	width      int
@@ -125,6 +126,7 @@ func NewVideoTrack(width, height int) (*VideoTrack, error) {
 	return &VideoTrack{
 		track:      track,
 		encoder:    encoder,
+		reader:     reader,
 		frameCount: 0,
 		width:      width,
 		height:     height,
@@ -156,7 +158,7 @@ func (vt *VideoTrack) Start() {
 				log.Printf("Error decoding image: %v", err)
 				continue
 			}
-
+			vt.reader.frameChan <- img
 			// Read encoded data from encoder
 			encodedFrame, release, err := vt.encoder.Read()
 			if err != nil {
@@ -168,7 +170,7 @@ func (vt *VideoTrack) Start() {
 			vt.frameCount++
 			vt.mu.Unlock()
 
-			// Write sample to track
+			// Send to webRTC peer
 			if err := vt.track.WriteSample(media.Sample{
 				Data:     encodedFrame,
 				Duration: time.Second / 30,
