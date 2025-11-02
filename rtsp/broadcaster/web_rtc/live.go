@@ -223,7 +223,7 @@ func listen(conn *websocket.Conn, pc *webrtc.PeerConnection) {
 	}
 }
 
-func RunLive() {
+func RunLive(signalingUrl string) {
 	memory, err := watcher.NewSharedMemoryReceiver("video_frame")
 	if err != nil {
 		panic(fmt.Sprintf("Error creating shared memory receiver: %v", err))
@@ -265,7 +265,7 @@ func RunLive() {
 	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		fmt.Printf("Connection state: %s\n", state.String())
 	})
-	wsClient, _, err := websocket.DefaultDialer.Dial("ws://localhost:8080/ws?userId=53", nil)
+	wsClient, _, err := websocket.DefaultDialer.Dial(signalingUrl, nil)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -1,5 +1,5 @@
 class WebSocketSignalingClient {
-    constructor(userId, serverUrl = 'ws://localhost:8080/ws') {
+    constructor(userId, serverUrl = 'ws://localhost:7070/ws') {
         this.userId = userId;
         this.serverUrl = `${serverUrl}?userId=${userId}`;
         this.ws = null;
