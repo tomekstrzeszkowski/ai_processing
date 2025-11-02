@@ -19,12 +19,6 @@ type connInfo struct {
 	writeMux sync.Mutex
 }
 
-type SignalingMessage struct {
-	Type string                   `json:"type"`
-	Sdp  string                   `json:"sdp,omitempty"`
-	Ice  []map[string]interface{} `json:"ice,omitempty"`
-}
-
 func RunServer(port int) {
 	clients = make(map[*connInfo]int)
 	upgrader = websocket.Upgrader{
@@ -74,6 +68,5 @@ func RunServer(port int) {
 			clientsMux.RUnlock()
 		}
 	})
-	log.Printf("Server running on :%d", port)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
 }

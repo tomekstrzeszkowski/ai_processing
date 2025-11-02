@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC Video Sharing</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <ol>
+        <li>Run signaling server</li>
+        <li>Click receive</li>
+        <li>In new tab click send</li>
+    </ol>
+    <div class="container">
+        <!-- USER 1 FEED -->
+        <div class="video-container" id="myVideoContainer">
+            <!-- User's video stream will be displayed here -->
+            <video id="myVideo" autoplay playsinline></video>
+        </div>
+
+        <!-- USER 2 FEED (hypothetical) -->
+        <div class="video-container" id="otherUserContainer">
+            <video id="otherVideo" autoplay playsinline></video>
+        </div>
+    </div>
+    <button id="send">Send</button>
+    <button id="receive">Receive</button>
+    <script src="main.js"></script>
+    <script src="client.js"></script>
+</body>
+</html>

@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"image"
 	"log"
-	"os"
-	"os/signal"
 	"sync"
 	"time"
 
@@ -16,7 +14,6 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
-	"github.com/pion/mediadevices/pkg/codec"
 	"github.com/pion/mediadevices/pkg/codec/vpx"
 	"github.com/pion/mediadevices/pkg/prop"
 	"github.com/pion/webrtc/v3"
@@ -52,23 +49,64 @@ var iceServers = []webrtc.ICEServer{
 	},
 }
 
-type Message struct {
-	Type string                   `json:"type"`
-	SDP  string                   `json:"sdp,omitempty"`
-	Ice  []map[string]interface{} `json:"ice,omitempty"`
-}
-
 type VideoTrack struct {
-	track      *webrtc.TrackLocalStaticSample
-	encoder    codec.ReadCloser
-	reader     *frameReader
-	frameCount int
-	mu         sync.Mutex
-	width      int
-	height     int
+	track   *webrtc.TrackLocalStaticSample
+	reader  *frameReader
+	mu      sync.Mutex
+	encoder interface {
+		Read() ([]byte, func(), error)
+		Close() error
+	}
 }
 
-// frameReader implements codec.Reader interface for feeding frames to encoder
+func (vt *VideoTrack) SendFrame(frame image.Image) error {
+	vt.mu.Lock()
+	defer vt.mu.Unlock()
+
+	// Initialize encoder on first frame
+	if vt.encoder == nil {
+		bounds := frame.Bounds()
+		width, height := bounds.Dx(), bounds.Dy()
+
+		vt.reader = newFrameReader(width, height)
+
+		params, err := vpx.NewVP8Params()
+		if err != nil {
+			return err
+		}
+		params.BitRate = 2_000_000
+		params.KeyFrameInterval = 60
+
+		vt.encoder, err = params.BuildVideoEncoder(vt.reader, prop.Media{
+			Video: prop.Video{
+				Width:  width,
+				Height: height,
+			},
+		})
+		if err != nil {
+			return err
+		}
+	}
+	vt.reader.frameChan <- frame
+
+	encodedFrame, release, err := vt.encoder.Read()
+	defer release()
+	if err != nil {
+		log.Printf("Error reading from encoder: %v", err)
+		return err
+	}
+
+	// Send to webRTC peer
+	if err := vt.track.WriteSample(media.Sample{
+		Data:     encodedFrame,
+		Duration: time.Second / 30,
+	}); err != nil {
+		log.Printf("Error writing sample: %v", err)
+	}
+
+	return nil
+}
+
 type frameReader struct {
 	frameChan chan image.Image
 	width     int
@@ -91,7 +129,7 @@ func (r *frameReader) Read() (image.Image, func(), error) {
 	return frame, func() {}, nil
 }
 
-func NewVideoTrack(width, height int) (*VideoTrack, error) {
+func NewVideoTrack() (*VideoTrack, error) {
 	track, err := webrtc.NewTrackLocalStaticSample(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8},
 		"video",
@@ -101,86 +139,28 @@ func NewVideoTrack(width, height int) (*VideoTrack, error) {
 		return nil, err
 	}
 
-	// Create frame reader
-	reader := newFrameReader(width, height)
-
-	// Create VP8 encoder params
-	params, err := vpx.NewVP8Params()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create VP8 params: %w", err)
-	}
-	params.BitRate = 2_000_000 // 2 Mbps
-	params.KeyFrameInterval = 60
-
-	// Build encoder
-	encoder, err := params.BuildVideoEncoder(reader, prop.Media{
-		Video: prop.Video{
-			Width:  width,
-			Height: height,
-		},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to build encoder: %w", err)
-	}
-
 	return &VideoTrack{
-		track:      track,
-		encoder:    encoder,
-		reader:     reader,
-		frameCount: 0,
-		width:      width,
-		height:     height,
+		track: track,
 	}, nil
 }
 
-func (vt *VideoTrack) Start() {
-	memory, err := watcher.NewSharedMemoryReceiver("video_frame")
-	if err != nil {
-		log.Printf("Error creating shared memory receiver: %v", err)
-		return
-	}
+func (vt *VideoTrack) Start(memory *watcher.SharedMemoryReceiver) {
+	ticker := time.NewTicker(time.Second / 30) // 30 FPS
+	defer ticker.Stop()
 
-	go func() {
-		ticker := time.NewTicker(time.Second / 30) // 30 FPS
-		defer ticker.Stop()
-
-		for range ticker.C {
-			frameData, _, err := memory.ReadFrameFromShm()
-			if err != nil {
-				log.Printf("Error reading frame: %v", err)
-				continue
-			}
-
-			// Decode image
-			img, _, err := image.Decode(bytes.NewReader(frameData))
-			fmt.Printf("Decoded image size: %dx%d\n", img.Bounds().Dx(), img.Bounds().Dy())
-			if err != nil {
-				log.Printf("Error decoding image: %v", err)
-				continue
-			}
-			vt.reader.frameChan <- img
-			// Read encoded data from encoder
-			encodedFrame, release, err := vt.encoder.Read()
-			if err != nil {
-				log.Printf("Error reading from encoder: %v", err)
-				continue
-			}
-
-			vt.mu.Lock()
-			vt.frameCount++
-			vt.mu.Unlock()
-
-			// Send to webRTC peer
-			if err := vt.track.WriteSample(media.Sample{
-				Data:     encodedFrame,
-				Duration: time.Second / 30,
-			}); err != nil {
-				log.Printf("Error writing sample: %v", err)
-			}
-
-			release()
+	for range ticker.C {
+		frameData, _, err := memory.ReadFrameFromShm()
+		if err != nil {
+			log.Printf("Error reading frame: %v", err)
+			continue
 		}
-	}()
+		img, _, err := image.Decode(bytes.NewReader(frameData))
+		if err != nil {
+			log.Printf("Error decoding image: %v", err)
+			continue
+		}
+		vt.SendFrame(img)
+	}
 }
 
 func (vt *VideoTrack) Close() error {
@@ -198,7 +178,7 @@ func listen(conn *websocket.Conn, pc *webrtc.PeerConnection) {
 			return
 		}
 
-		var msg Message
+		var msg SignalingMessage
 		if err := json.Unmarshal(message, &msg); err != nil {
 			log.Printf("Error unmarshaling message: %v", err)
 			continue
@@ -206,11 +186,11 @@ func listen(conn *websocket.Conn, pc *webrtc.PeerConnection) {
 
 		switch msg.Type {
 		case "offer":
-			// Handle offer if needed
+			// no need for now
 		case "answer":
 			answer := webrtc.SessionDescription{
 				Type: webrtc.SDPTypeAnswer,
-				SDP:  msg.SDP,
+				SDP:  msg.Sdp,
 			}
 			if err := pc.SetRemoteDescription(answer); err != nil {
 				log.Printf("Error setting remote description: %v", err)
@@ -244,25 +224,22 @@ func listen(conn *websocket.Conn, pc *webrtc.PeerConnection) {
 }
 
 func RunLive() {
-	// Load environment variables
+	memory, err := watcher.NewSharedMemoryReceiver("video_frame")
+	if err != nil {
+		panic(fmt.Sprintf("Error creating shared memory receiver: %v", err))
+	}
 	if err := godotenv.Load(); err != nil {
 		log.Printf("Warning: Error loading .env file: %v", err)
 	}
-
-	// Create WebRTC configuration
-	config := webrtc.Configuration{
+	pc, err := webrtc.NewPeerConnection(webrtc.Configuration{
 		ICEServers: iceServers,
-	}
-
-	// Create peer connection
-	pc, err := webrtc.NewPeerConnection(config)
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer pc.Close()
 
-	// Create video track (adjust width/height to match your frames)
-	videoTrack, err := NewVideoTrack(1920, 1080)
+	videoTrack, err := NewVideoTrack()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -288,18 +265,12 @@ func RunLive() {
 	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		fmt.Printf("Connection state: %s\n", state.String())
 	})
-
-	// Connect to WebSocket
-	conn, _, err := websocket.DefaultDialer.Dial("ws://localhost:8080/ws?userId=53", nil)
+	wsClient, _, err := websocket.DefaultDialer.Dial("ws://localhost:8080/ws?userId=53", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer conn.Close()
-
-	// Start listening for messages
-	go listen(conn, pc)
-
-	// Create offer
+	defer wsClient.Close()
+	go listen(wsClient, pc)
 	offer, err := pc.CreateOffer(nil)
 	if err != nil {
 		log.Fatal(err)
@@ -308,28 +279,13 @@ func RunLive() {
 	if err := pc.SetLocalDescription(offer); err != nil {
 		log.Fatal(err)
 	}
-
-	// Send offer
-	offerMsg := Message{
-		Type: pc.LocalDescription().Type.String(),
-		SDP:  pc.LocalDescription().SDP,
-	}
-	offerData, err := json.Marshal(offerMsg)
+	offerData, err := json.Marshal(offer)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if err := conn.WriteMessage(websocket.TextMessage, offerData); err != nil {
+	if err := wsClient.WriteMessage(websocket.TextMessage, offerData); err != nil {
 		log.Fatal(err)
 	}
-
-	// Start video track
-	videoTrack.Start()
-
-	// Wait for interrupt
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt)
-	<-sigChan
-
-	fmt.Println("Shutting down...")
+	videoTrack.Start(memory)
 }
