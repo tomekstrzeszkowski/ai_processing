@@ -5,7 +5,10 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 
 type WebRtcContextType = {
   remoteStream: MediaStream | null;
-  videoRef: React.RefObject<HTMLVideoElement>;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
+  isConnected: boolean;
+  handlePlayRef: React.RefObject<EventListenerOrEventListenerObject>;
+  handlePauseRef: React.RefObject<EventListenerOrEventListenerObject>;
 };
 
 const WebRtcContext = createContext<WebRtcContextType | null>(null);
@@ -23,16 +26,21 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const handlePlayRef = useRef<EventListenerOrEventListenerObject>(() => {});
   const handlePauseRef = useRef<EventListenerOrEventListenerObject>(() => {});
+  const offereeRef = useRef<WebRtcOfferee>(new WebRtcOfferee());
+  const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
     const host = document.location.hostname || 'localhost';
     const signalingServerUrl = `ws://${host}:7070/ws`;
     const signalingClient = new WebSocketSignalingClient(52, signalingServerUrl);
-    const offeree = new WebRtcOfferee();
+    const offeree = offereeRef.current;
     offeree.handlePC();
     offeree.pc.addEventListener("track", (event) => {
       const stream = event.streams[0] || new MediaStream([event.track]);
       setRemoteStream(stream);
+    });
+    offeree.pc.addEventListener("connectionstatechange", () => {
+      setIsConnected(offeree.pc.connectionState === "connected");
     });
     handlePlayRef.current = async () => {
         await signalingClient.connect();
@@ -60,6 +68,7 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
     handlePauseRef.current = () => {
       signalingClient.disconnect();
       offeree.close();
+      setIsConnected(false);
     };
     offeree.handleDataChannel();
     videoRef.current?.addEventListener("play", handlePlayRef.current);
@@ -82,6 +91,7 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
     videoRef,
     handlePlayRef,
     handlePauseRef,
+    isConnected,
   };
   return (
     <WebRtcContext.Provider value={value}>

@@ -43,17 +43,14 @@ const App = () => {
     wsRef, isConnecting, setIsConnecting, serverUrl, httpServerUrl
   } = useWebSocket();
   const { protocol } = useProtocol();
-  const { handlePlayRef, handlePauseRef } = useWebRtc();
+  const { handlePlayRef, handlePauseRef, isConnected: isWebRtcConnected } = useWebRtc();
 
   const connect = () => {
+    if (isConnecting || isConnected) return;
+    setIsConnecting(true);
     if (protocol.current === "WEBRTC_PROTOCOL") {
       handlePlayRef.current();
-      setIsConnected(true);
     } else {
-      if (isConnecting || isConnected) return;
-      
-      setIsConnecting(true);
-      
       try {
         // For web, ensure we use the correct WebSocket URL
         const wsUrl = Platform.OS === 'web' && serverUrl.includes('localhost') 
@@ -123,8 +120,7 @@ const App = () => {
 
   const disconnect = () => {
     if (protocol.current === "WEBRTC_PROTOCOL") {
-    handlePauseRef.current();
-    setIsConnected(false);
+      handlePauseRef.current();
     } else {
       if (wsRef.current) {
         wsRef.current.close();
@@ -154,7 +150,15 @@ const App = () => {
       console.error('Error fetching status:', error);
     }
   };
-
+  useEffect(() => {
+    if (protocol.current === "WEBRTC_PROTOCOL") {
+      console.log('WebRTC connection state changed:', isWebRtcConnected);
+      setIsConnected(isWebRtcConnected);
+      if (isWebRtcConnected) {
+        setIsConnecting(false);
+      }
+    }
+  }), [isWebRtcConnected];
   useEffect(() => {
     const interval = setInterval(() => {
       if (isConnected) {
