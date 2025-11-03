@@ -1,4 +1,5 @@
 import { CachedVideoPlayer } from '@/components/CachedVideoPlayer';
+import { LiveVideoPlayer } from '@/components/LiveVideoPlayer';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -178,6 +179,9 @@ const App = () => {
             </View>
           )}
         </View>
+
+        <LiveVideoPlayer />
+        
         <StatusBar style="light" backgroundColor="#1a1a1a" />
 
         <View style={styles.connectionContainer}>
