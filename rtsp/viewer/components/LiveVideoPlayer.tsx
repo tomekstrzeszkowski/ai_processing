@@ -8,7 +8,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = () => {
   return (
     <div className="video-container">
         <video 
-            style={{ width: '100%' }}
+            style={{ width: '100%', display: "flex", margin:"auto" }}
             ref={videoRef}
             autoPlay 
             playsInline

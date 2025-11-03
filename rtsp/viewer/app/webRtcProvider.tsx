@@ -17,42 +17,57 @@ export const useWebRtc = () => {
   }
   return context;
 };
-
+  
 export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const handlePlayRef = useRef<EventListenerOrEventListenerObject>(() => {});
+  const handlePauseRef = useRef<EventListenerOrEventListenerObject>(() => {});
 
   useEffect(() => {
     const host = document.location.hostname || 'localhost';
     const signalingServerUrl = `ws://${host}:7070/ws`;
     const signalingClient = new WebSocketSignalingClient(52, signalingServerUrl);
-    signalingClient.connect();
     const offeree = new WebRtcOfferee();
-    signalingClient.onIce(async candidates => {
-        await offeree.handleIceCandidates({ice: candidates.ice as RTCIceCandidate[]});
-    }); 
-    signalingClient.onOffer(async (offer: SignalingMessage) => {
-        offeree.handlePC();
-        offeree.pc.addEventListener("track", (event) => {
-          const stream = event.streams[0] || new MediaStream([event.track]);
-          setRemoteStream(stream);
-        });
-        offeree.handleDataChannel();
-        const sdp = String(offer.sdp);
-        await offeree.pc.setRemoteDescription({sdp, type: 'offer'});
-        const answer = await offeree.pc.createAnswer(); 
-        console.log("set local");
-        await offeree.pc.setLocalDescription(answer);
-        console.log("send answer");
-        signalingClient.sendAnswer(answer);
-        setTimeout(() => {
-            console.log("icCandidates Generated", offeree.iceCandidatesGenerated)
-            signalingClient.sendIceCandidates(offeree.iceCandidatesGenerated);
-        }, 1000);
+    offeree.handlePC();
+    offeree.pc.addEventListener("track", (event) => {
+      const stream = event.streams[0] || new MediaStream([event.track]);
+      setRemoteStream(stream);
     });
+    handlePlayRef.current = async () => {
+        await signalingClient.connect();
+        signalingClient.onIce(async candidates => {
+          try{
+            await offeree.handleIceCandidates({ice: candidates.ice as RTCIceCandidate[]});
+          } catch (error) {
+            console.error("Error handling ICE candidates:", error);
+          }
+        }); 
+        signalingClient.onOffer(async (offer: SignalingMessage) => {
+          if (offeree.pc.connectionState === "closed" || offeree.pc.signalingState === "closed") {
+            offeree.initializePeerConnection();
+          }
+          const sdp = String(offer.sdp);
+          console.log("signaling state", offeree.pc.signalingState);
+          await offeree.pc.setRemoteDescription({sdp, type: 'offer'});
+          const answer = await offeree.pc.createAnswer();
+          await offeree.pc.setLocalDescription(answer);
+          signalingClient.sendAnswer(answer);
+          await offeree.waitForCandidates();
+          signalingClient.sendIceCandidates(offeree.iceCandidatesGenerated);
+        });
+    };
+    handlePauseRef.current = () => {
+      signalingClient.disconnect();
+      offeree.close();
+    };
+    offeree.handleDataChannel();
+    videoRef.current?.addEventListener("play", handlePlayRef.current);
+    videoRef.current?.addEventListener("pause", handlePauseRef.current);
     return () => {
-      // signalingClient.disconnect();
-      // offeree.pc.close();
+      console.log("Cleaning up WebRTC connections");
+      videoRef.current?.removeEventListener("play", handlePlayRef.current);
+      videoRef.current?.removeEventListener("pause", handlePauseRef.current);
     }
   });
   // Update video element when stream changes
@@ -65,6 +80,8 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
   const value = {
     remoteStream,
     videoRef,
+    handlePlayRef,
+    handlePauseRef,
   };
   return (
     <WebRtcContext.Provider value={value}>

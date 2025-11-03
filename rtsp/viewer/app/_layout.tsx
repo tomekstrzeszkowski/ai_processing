@@ -6,6 +6,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 
+import { ProtocolProvider } from './protocolProvider';
 import { WebRtcProvider } from './webRtcProvider';
 import { WebSocketProvider } from './websocketProvider';
 
@@ -22,16 +23,18 @@ export default function RootLayout() {
   }
 
   return (
-    <WebRtcProvider>
-      <WebSocketProvider>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="+not-found" />
-          </Stack>
-          <StatusBar style="auto" />
-        </ThemeProvider>
-      </WebSocketProvider>
-    </WebRtcProvider>
+    <ProtocolProvider>
+      <WebRtcProvider>
+        <WebSocketProvider>
+          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <Stack>
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="+not-found" />
+            </Stack>
+            <StatusBar style="auto" />
+          </ThemeProvider>
+        </WebSocketProvider>
+      </WebRtcProvider>
+    </ProtocolProvider>
   );
 }

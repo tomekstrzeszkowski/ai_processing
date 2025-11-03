@@ -1,6 +1,8 @@
-import { createContext, useContext } from 'react';
-
-const ProtocolContext = createContext<WebSocketContextType | null>(null);
+import { createContext, useContext, useRef } from 'react';
+type ProtocolContextType = {
+  protocol: React.RefObject<string | null>;
+};
+const ProtocolContext = createContext<ProtocolContextType | null>(null);
 
 export const useProtocol = () => {
   const context = useContext(ProtocolContext);
@@ -11,6 +13,8 @@ export const useProtocol = () => {
 };
 
 export const ProtocolProvider = ({ children }: { children: React.ReactNode }) => {
+  const protocol = useRef<string>("WEBRTC_PROTOCOL");
+  const value = { protocol };
   return (
     <ProtocolContext.Provider value={value}>
       {children}

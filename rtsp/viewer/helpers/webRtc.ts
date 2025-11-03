@@ -38,9 +38,24 @@ export class WebRtcOfferee{
     constructor() {
         this.pc = new RTCPeerConnection(this.configuration);
     }
+    close() {
+      if (this.pc.connectionState !== "closed") {
+        this.dataChannel?.close();
+        this.pc.close();
+      }
+      this.iceCandidatesGenerated = [];
+      this.iceCandidateReceivedBuffer = [];
+    }  
+
+    initializePeerConnection() {
+        this.pc = new RTCPeerConnection(this.configuration);
+        this.handlePC();
+        this.handleDataChannel()
+    }
 
     handlePC(stream: MediaStream|null = null) {
         this.pc.addEventListener("negotiationneeded", async () => {
+            console.log("negotiation needed");
             // const offer = await pc.createOffer();
             // await this.pc.setLocalDescription(offer);
         });
@@ -56,7 +71,7 @@ export class WebRtcOfferee{
         });
         this.pc.addEventListener("iceconnectionstatechange", () => {
             console.log(`iceconnectionstatechange ${this.pc.iceConnectionState}`);
-            if (this.pc.iceConnectionState === "disconnected" && this.pc) {
+            if (this.pc.iceConnectionState === "disconnected") {
                 this.pc.close();
             }
         });
@@ -78,12 +93,40 @@ export class WebRtcOfferee{
     handleIceCandidates({ice: candidates}: {ice: RTCIceCandidate[]}) {
         if (this.pc.remoteDescription) {
             candidates.forEach(async candidate => {
-                await this.pc.addIceCandidate(candidate);
+                try{
+                    await this.pc.addIceCandidate(candidate);
+                } catch (error) {
+                    console.error("Error adding ICE candidate:", error);
+                }
             });
         } else {
             candidates.forEach(candidate => {
                 this.iceCandidateReceivedBuffer.push(candidate);
             });
         }
+    };
+    waitForCandidates(minCandidates = 5, timeout = 5000) {
+        return new Promise<void>((resolve) => {
+            let timeoutId: number | null = null;
+            let resolved = false;
+
+            const finish = () => {
+                if (resolved) return;
+                resolved = true;
+                if (timeoutId) clearTimeout(timeoutId);
+                resolve();
+            };
+            timeoutId = setTimeout(finish, timeout);
+
+            this.pc.addEventListener("icecandidate", ({candidate}) => {
+                if (!candidate) {
+                    finish();
+                    return;
+                };
+                if (this.iceCandidatesGenerated.length >= minCandidates) {
+                    finish();
+                }
+            });
+        });
     };
 }

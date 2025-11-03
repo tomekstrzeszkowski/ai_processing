@@ -13,6 +13,8 @@ import {
   View
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { useProtocol } from '../protocolProvider';
+import { useWebRtc } from '../webRtcProvider';
 import { useWebSocket } from '../websocketProvider';
 
 const { width, height } = Dimensions.get('window');
@@ -40,86 +42,98 @@ const App = () => {
   const {
     wsRef, isConnecting, setIsConnecting, serverUrl, httpServerUrl
   } = useWebSocket();
-  
+  const { protocol } = useProtocol();
+  const { handlePlayRef, handlePauseRef } = useWebRtc();
+
   const connect = () => {
-    if (isConnecting || isConnected) return;
-    
-    setIsConnecting(true);
-    
-    try {
-      // For web, ensure we use the correct WebSocket URL
-      const wsUrl = Platform.OS === 'web' && serverUrl.includes('localhost') 
-        ? serverUrl.replace('localhost', window.location.hostname)
-        : serverUrl;
+    if (protocol.current === "WEBRTC_PROTOCOL") {
+      handlePlayRef.current();
+      setIsConnected(true);
+    } else {
+      if (isConnecting || isConnected) return;
       
-      wsRef.current = new WebSocket(wsUrl);
+      setIsConnecting(true);
       
-      wsRef.current.onopen = () => {
-        setIsConnected(true);
-        setIsConnecting(false);
-        console.log('Connected to WebSocket server');
-      };
-      
-      wsRef.current.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          if (message.type === 'frame') {
-            // CRITICAL: Frame throttling to prevent memory overflow
-            const now = Date.now();
-            if (now - lastUpdateRef.current < MIN_FRAME_INTERVAL) {
-              // Skip this frame - too soon since last update
-              return;
+      try {
+        // For web, ensure we use the correct WebSocket URL
+        const wsUrl = Platform.OS === 'web' && serverUrl.includes('localhost') 
+          ? serverUrl.replace('localhost', window.location.hostname)
+          : serverUrl;
+        
+        wsRef.current = new WebSocket(wsUrl);
+        
+        wsRef.current.onopen = () => {
+          setIsConnected(true);
+          setIsConnecting(false);
+          console.log('Connected to WebSocket server');
+        };
+        
+        wsRef.current.onmessage = (event) => {
+          try {
+            const message = JSON.parse(event.data);
+            if (message.type === 'frame') {
+              // CRITICAL: Frame throttling to prevent memory overflow
+              const now = Date.now();
+              if (now - lastUpdateRef.current < MIN_FRAME_INTERVAL) {
+                // Skip this frame - too soon since last update
+                return;
+              }
+              
+              lastUpdateRef.current = now;
+              frameCountRef.current += 1;
+              
+              // Create new URI
+              const uri = `data:image/jpeg;base64,${message.data}`;
+              
+              // Clear old URI reference to help GC
+              lastUriRef.current = null;
+              
+              setImageUri(uri);
+              lastUriRef.current = uri;
+              setLastFrameTime(new Date().toLocaleTimeString());
+              
+            } else if (message.type === 'client_count') {
+              setClientCount(message.count);
             }
-            
-            lastUpdateRef.current = now;
-            frameCountRef.current += 1;
-            
-            // Create new URI
-            const uri = `data:image/jpeg;base64,${message.data}`;
-            
-            // Clear old URI reference to help GC
-            lastUriRef.current = null;
-            
-            setImageUri(uri);
-            lastUriRef.current = uri;
-            setLastFrameTime(new Date().toLocaleTimeString());
-            
-          } else if (message.type === 'client_count') {
-            setClientCount(message.count);
+          } catch (error) {
+            console.error('Error parsing message:', error);
           }
-        } catch (error) {
-          console.error('Error parsing message:', error);
-        }
-      };
-      
-      wsRef.current.onclose = (event) => {
-        setIsConnected(false);
+        };
+        
+        wsRef.current.onclose = (event) => {
+          setIsConnected(false);
+          setIsConnecting(false);
+          setImageUri(null);
+          lastUriRef.current = null;
+          frameCountRef.current = 0;
+          console.log('Disconnected from WebSocket server', event.code, event.reason);
+        };
+        
+        wsRef.current.onerror = (error) => {
+          setIsConnecting(false);
+          showAlert('Connection Error', 'Failed to connect to server');
+          console.error('WebSocket error:', error);
+        };
+      } catch (error) {
         setIsConnecting(false);
-        setImageUri(null);
-        lastUriRef.current = null;
-        frameCountRef.current = 0;
-        console.log('Disconnected from WebSocket server', event.code, event.reason);
-      };
-      
-      wsRef.current.onerror = (error) => {
-        setIsConnecting(false);
-        showAlert('Connection Error', 'Failed to connect to server');
-        console.error('WebSocket error:', error);
-      };
-    } catch (error) {
-      setIsConnecting(false);
-      showAlert('Connection Error', 'Invalid server URL');
+        showAlert('Connection Error', 'Invalid server URL');
+      }
     }
   };
 
   const disconnect = () => {
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
+    if (protocol.current === "WEBRTC_PROTOCOL") {
+    handlePauseRef.current();
+    setIsConnected(false);
+    } else {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      setImageUri(null);
+      lastUriRef.current = null;
+      frameCountRef.current = 0;
     }
-    setImageUri(null);
-    lastUriRef.current = null;
-    frameCountRef.current = 0;
   };
 
   const fetchStatus = async () => {
