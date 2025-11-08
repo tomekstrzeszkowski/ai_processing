@@ -43,7 +43,7 @@ const App = () => {
     wsRef, isConnecting, setIsConnecting, serverUrl, httpServerUrl
   } = useWebSocket();
   const { protocol } = useProtocol();
-  const { handlePlayRef, handlePauseRef, isConnected: isWebRtcConnected } = useWebRtc();
+  const { handlePlayRef, handleStopRef, isConnected: isWebRtcConnected } = useWebRtc();
 
   const connect = () => {
     if (isConnecting || isConnected) return;
@@ -120,7 +120,7 @@ const App = () => {
 
   const disconnect = () => {
     if (protocol.current === "WEBRTC_PROTOCOL") {
-      handlePauseRef.current();
+      handleStopRef.current();
     } else {
       if (wsRef.current) {
         wsRef.current.close();
@@ -198,7 +198,7 @@ const App = () => {
           )}
         </View>
 
-        <LiveVideoPlayer />
+        <LiveVideoPlayer isConnected={isConnected} />
         
         <StatusBar style="light" backgroundColor="#1a1a1a" />
 

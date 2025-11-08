@@ -8,7 +8,7 @@ type WebRtcContextType = {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   isConnected: boolean;
   handlePlayRef: React.RefObject<EventListenerOrEventListenerObject>;
-  handlePauseRef: React.RefObject<EventListenerOrEventListenerObject>;
+  handleStopRef: React.RefObject<EventListenerOrEventListenerObject>;
 };
 
 const WebRtcContext = createContext<WebRtcContextType | null>(null);
@@ -25,7 +25,7 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const handlePlayRef = useRef<EventListenerOrEventListenerObject>(() => {});
-  const handlePauseRef = useRef<EventListenerOrEventListenerObject>(() => {});
+  const handleStopRef = useRef<EventListenerOrEventListenerObject>(() => {});
   const offereeRef = useRef<WebRtcOfferee>(new WebRtcOfferee((state) => {
     setIsConnected(state === "connected");
   }, (stream) => {
@@ -38,7 +38,7 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
     const signalingServerUrl = `ws://${host}:7070/ws`;
     const signalingClient = new WebSocketSignalingClient(52, signalingServerUrl);
     videoRef.current?.addEventListener("play", handlePlayRef.current);
-    videoRef.current?.addEventListener("pause", handlePauseRef.current);
+    videoRef.current?.addEventListener("pause", handleStopRef.current);
 
     handlePlayRef.current = async () => {
         const offeree = offereeRef.current;
@@ -70,12 +70,12 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
           signalingClient.sendIceCandidates(offeree.iceCandidatesGenerated);
         });
     };
-    handlePauseRef.current = () => {
+    handleStopRef.current = () => {
       signalingClient.disconnect();
       offereeRef.current.close();
       setIsConnected(false);
       videoRef.current?.removeEventListener("play", handlePlayRef.current);
-      videoRef.current?.removeEventListener("pause", handlePauseRef.current);
+      videoRef.current?.removeEventListener("pause", handleStopRef.current);
     };
     return () => {
       console.log("Cleaning up WebRTC connections");
@@ -92,7 +92,7 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
     remoteStream,
     videoRef,
     handlePlayRef,
-    handlePauseRef,
+    handleStopRef,
     isConnected,
   };
   return (

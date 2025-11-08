@@ -1,18 +1,22 @@
 import { useWebRtc } from '@/app/webRtcProvider';
 
-interface LiveVideoPlayerProps {}
+interface LiveVideoPlayerProps {
+  isConnected: boolean;
+}
 
-export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = () => {
+export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({isConnected}) => {
   const { videoRef } = useWebRtc();
 
   return (
     <div className="video-container">
-        <video 
-            style={{ width: '100%', display: "flex", margin:"auto" }}
-            ref={videoRef}
-            autoPlay 
-            playsInline
-        />
+      <video 
+          controls
+          style={{ display: isConnected ? "flex": "none", margin:"auto" }}
+          ref={videoRef}
+          autoPlay 
+          playsInline
+      />
+      {!isConnected && <div>No video.</div>}
     </div>
   );
 }
