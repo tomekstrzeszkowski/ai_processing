@@ -36,9 +36,11 @@ export class WebRtcOfferee{
         ]
     };
     onIceConnectionChange: (state: string) => void = () => {};
-    constructor(onIceConnectionChange: (state: string) => void) {
+    onTrack: (stream: MediaStream) => void = () => {};
+    constructor(onIceConnectionChange: (state: string) => void, onTrack: (stream: MediaStream) => void) {
         this.pc = null;
         this.onIceConnectionChange = onIceConnectionChange;
+        this.onTrack = onTrack;
     }
     close() {
       if (this.pc?.connectionState !== "closed") {
@@ -78,6 +80,10 @@ export class WebRtcOfferee{
             if (this.pc?.iceConnectionState === "disconnected") {
                 this.close();
             }
+        });
+        this.pc?.addEventListener("track", (event) => {
+          const stream = event.streams[0] || new MediaStream([event.track]);
+          this.onTrack(stream);
         });
     };
     handleDataChannel() {

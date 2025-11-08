@@ -28,6 +28,8 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
   const handlePauseRef = useRef<EventListenerOrEventListenerObject>(() => {});
   const offereeRef = useRef<WebRtcOfferee>(new WebRtcOfferee((state) => {
     setIsConnected(state === "connected");
+  }, (stream) => {
+    setRemoteStream(stream);
   }));
   const [isConnected, setIsConnected] = useState(false);
 
@@ -42,10 +44,6 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
         const offeree = offereeRef.current;
         await signalingClient.connect();
         offeree.initializePeerConnection();
-        offeree.pc.addEventListener("track", (event) => {
-          const stream = event.streams[0] || new MediaStream([event.track]);
-          setRemoteStream(stream);
-        });
         signalingClient.onIce(async candidates => {
           try{
             await offeree.handleIceCandidates({ice: candidates.ice as RTCIceCandidate[]});
@@ -54,18 +52,19 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
           }
         }); 
         signalingClient.onOffer(async (offer: SignalingMessage) => {
-          if (offeree.pc.connectionState === "closed" || offeree.pc.signalingState === "closed") {
+          if (offeree.pc?.connectionState === "closed" || offeree.pc?.signalingState === "closed") {
+            //can be closed by other peer
             offeree.initializePeerConnection();
-            console.log("CLOSED")
-            alert("CLOSED")
-          } else if (offeree.pc.connectionState === "connected") {
+            return;
+          } else if (offeree.pc?.connectionState === "connected") {
             return;
           }
           const sdp = String(offer.sdp);
-          console.log("signaling state", offeree.pc.signalingState);
-          await offeree.pc.setRemoteDescription({sdp, type: 'offer'});
-          const answer = await offeree.pc.createAnswer();
-          await offeree.pc.setLocalDescription(answer);
+          console.log("signaling state", offeree.pc?.signalingState);
+          await offeree.pc?.setRemoteDescription({sdp, type: 'offer'});
+          const answer = await offeree.pc?.createAnswer();
+          await offeree.pc?.setLocalDescription(answer);
+          if(!answer) return;
           signalingClient.sendAnswer(answer);
           await offeree.waitForCandidates();
           signalingClient.sendIceCandidates(offeree.iceCandidatesGenerated);
