@@ -26,24 +26,26 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const handlePlayRef = useRef<EventListenerOrEventListenerObject>(() => {});
   const handlePauseRef = useRef<EventListenerOrEventListenerObject>(() => {});
-  const offereeRef = useRef<WebRtcOfferee>(new WebRtcOfferee());
+  const offereeRef = useRef<WebRtcOfferee>(new WebRtcOfferee((state) => {
+    setIsConnected(state === "connected");
+  }));
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
     const host = document.location.hostname || 'localhost';
     const signalingServerUrl = `ws://${host}:7070/ws`;
     const signalingClient = new WebSocketSignalingClient(52, signalingServerUrl);
-    const offeree = offereeRef.current;
-    offeree.handlePC();
-    offeree.pc.addEventListener("track", (event) => {
-      const stream = event.streams[0] || new MediaStream([event.track]);
-      setRemoteStream(stream);
-    });
-    offeree.pc.addEventListener("connectionstatechange", () => {
-      setIsConnected(offeree.pc.connectionState === "connected");
-    });
+    videoRef.current?.addEventListener("play", handlePlayRef.current);
+    videoRef.current?.addEventListener("pause", handlePauseRef.current);
+
     handlePlayRef.current = async () => {
+        const offeree = offereeRef.current;
         await signalingClient.connect();
+        offeree.initializePeerConnection();
+        offeree.pc.addEventListener("track", (event) => {
+          const stream = event.streams[0] || new MediaStream([event.track]);
+          setRemoteStream(stream);
+        });
         signalingClient.onIce(async candidates => {
           try{
             await offeree.handleIceCandidates({ice: candidates.ice as RTCIceCandidate[]});
@@ -54,6 +56,10 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
         signalingClient.onOffer(async (offer: SignalingMessage) => {
           if (offeree.pc.connectionState === "closed" || offeree.pc.signalingState === "closed") {
             offeree.initializePeerConnection();
+            console.log("CLOSED")
+            alert("CLOSED")
+          } else if (offeree.pc.connectionState === "connected") {
+            return;
           }
           const sdp = String(offer.sdp);
           console.log("signaling state", offeree.pc.signalingState);
@@ -67,18 +73,15 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
     };
     handlePauseRef.current = () => {
       signalingClient.disconnect();
-      offeree.close();
+      offereeRef.current.close();
       setIsConnected(false);
-    };
-    offeree.handleDataChannel();
-    videoRef.current?.addEventListener("play", handlePlayRef.current);
-    videoRef.current?.addEventListener("pause", handlePauseRef.current);
-    return () => {
-      console.log("Cleaning up WebRTC connections");
       videoRef.current?.removeEventListener("play", handlePlayRef.current);
       videoRef.current?.removeEventListener("pause", handlePauseRef.current);
+    };
+    return () => {
+      console.log("Cleaning up WebRTC connections");
     }
-  });
+  }, []);
   // Update video element when stream changes
   useEffect(() => {
     if (videoRef.current && remoteStream) {

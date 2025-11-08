@@ -87,5 +87,8 @@ export class WebSocketSignalingClient {
         if (this.ws) {
             this.ws.close();
         }
+        this.messageHandlers.ice = [];
+        this.messageHandlers.answer = [];
+        this.messageHandlers.offer = [];
     }
 }

@@ -1,5 +1,5 @@
 export class WebRtcOfferee{
-    pc: RTCPeerConnection;
+    pc: RTCPeerConnection | null = null;
     dataChannel: RTCDataChannel | undefined;
     iceCandidatesGenerated: RTCIceCandidate[] = [];
     iceCandidateReceivedBuffer: RTCIceCandidate[] = [];
@@ -35,13 +35,15 @@ export class WebRtcOfferee{
             }
         ]
     };
-    constructor() {
-        this.pc = new RTCPeerConnection(this.configuration);
+    onIceConnectionChange: (state: string) => void = () => {};
+    constructor(onIceConnectionChange: (state: string) => void) {
+        this.pc = null;
+        this.onIceConnectionChange = onIceConnectionChange;
     }
     close() {
-      if (this.pc.connectionState !== "closed") {
+      if (this.pc?.connectionState !== "closed") {
         this.dataChannel?.close();
-        this.pc.close();
+        this.pc?.close();
       }
       this.iceCandidatesGenerated = [];
       this.iceCandidateReceivedBuffer = [];
@@ -54,6 +56,7 @@ export class WebRtcOfferee{
     }
 
     handlePC(stream: MediaStream|null = null) {
+        if (this.pc === null) return;
         this.pc.addEventListener("negotiationneeded", async () => {
             console.log("negotiation needed");
             // const offer = await pc.createOffer();
@@ -62,39 +65,41 @@ export class WebRtcOfferee{
         if (stream) {
             stream.getTracks().forEach(track => {
                 console.log("adding track", track);
-                this.pc.addTrack(track);
+                this.pc?.addTrack(track);
             }); 
         }
-        this.pc.addEventListener("icecandidate", ({candidate}) => {
+        this.pc?.addEventListener("icecandidate", ({candidate}) => {
             if(!candidate) return;
             this.iceCandidatesGenerated.push(candidate);
         });
-        this.pc.addEventListener("iceconnectionstatechange", () => {
-            console.log(`iceconnectionstatechange ${this.pc.iceConnectionState}`);
-            if (this.pc.iceConnectionState === "disconnected") {
-                this.pc.close();
+        this.pc?.addEventListener("iceconnectionstatechange", () => {
+            console.log(`iceconnectionstatechange ${this.pc?.iceConnectionState}`);
+            this.onIceConnectionChange(this.pc?.iceConnectionState??"");
+            if (this.pc?.iceConnectionState === "disconnected") {
+                this.close();
             }
         });
     };
     handleDataChannel() {
-        this.pc.addEventListener("datachannel", (e) => {
+        this.pc?.addEventListener("datachannel", (e) => {
             this.dataChannel = e.channel;
-            this.dataChannel.addEventListener("message", (e) => {
+            this.dataChannel?.addEventListener("message", (e) => {
                 console.log("message has been received from a Data Channel", e);
             });
-            this.dataChannel.addEventListener("close", (e) => {
+            this.dataChannel?.addEventListener("close", (e) => {
                 console.log("The close event was fired on you data channel object");
             });
-            this.dataChannel.addEventListener("open", (e) => {
+            this.dataChannel?.addEventListener("open", (e) => {
                 console.log("Data Channel has been opened. You are now ready to send/receive messsages over your Data Channel");
             });
         });
     };
     handleIceCandidates({ice: candidates}: {ice: RTCIceCandidate[]}) {
+        if (this.pc === null) return;
         if (this.pc.remoteDescription) {
             candidates.forEach(async candidate => {
                 try{
-                    await this.pc.addIceCandidate(candidate);
+                    await this.pc?.addIceCandidate(candidate);
                 } catch (error) {
                     console.error("Error adding ICE candidate:", error);
                 }
@@ -107,6 +112,7 @@ export class WebRtcOfferee{
     };
     waitForCandidates(minCandidates = 5, timeout = 5000) {
         return new Promise<void>((resolve) => {
+            if (this.pc === null) return;
             let timeoutId: number | null = null;
             let resolved = false;
 
