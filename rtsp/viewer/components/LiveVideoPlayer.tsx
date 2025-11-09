@@ -16,7 +16,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({isConnected}) =
           autoPlay 
           playsInline
       />
-      {!isConnected && <div>No video.</div>}
+      {!isConnected && <div style={{display: "flex"}}>No video.</div>}
     </div>
   );
 }

@@ -1,10 +1,8 @@
 import { CachedVideoPlayer } from '@/components/CachedVideoPlayer';
 import { LiveVideoPlayer } from '@/components/LiveVideoPlayer';
-import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Dimensions,
   Platform,
   StyleSheet,
@@ -20,30 +18,25 @@ import { useWebSocket } from '../websocketProvider';
 const { width, height } = Dimensions.get('window');
 
 const App = () => {
-  const [isConnected, setIsConnected] = useState(false);
-  const [lastFrameTime, setLastFrameTime] = useState(null);
-  const [clientCount, setClientCount] = useState(0);
-  const [imageUri, setImageUri] = useState(null);
-  const frameCountRef = useRef(0);
-  
-  // Frame throttling to prevent memory overflow
-  const lastUpdateRef = useRef(0);
   const lastUriRef = useRef(null);
-  const MIN_FRAME_INTERVAL = 33; // ~30fps max (adjust as needed)
 
-  const showAlert = (title, message) => {
-    if (Platform.OS === 'web') {
-      alert(`${title}: ${message}`);
-    } else {
-      Alert.alert(title, message);
-    }
-  };
   
   const {
-    wsRef, isConnecting, setIsConnecting, serverUrl, httpServerUrl
+    isConnecting, 
+    setIsConnecting, 
+    serverUrl, 
+    httpServerUrl, 
+    handlePlayRef: wsHandlePlayRef, 
+    isConnected, 
+    imageUri,
+    frameCountRef,
+    clientCount,
+    lastFrameTime,
+    setClientCount,
+    handleStopRef: wsHandleStopRef,
   } = useWebSocket();
   const { protocol } = useProtocol();
-  const { handlePlayRef, handleStopRef, isConnected: isWebRtcConnected } = useWebRtc();
+  const { handlePlayRef, handleStopRef: webrtcHandleStopRef, isConnected: isWebRtcConnected } = useWebRtc();
 
   const connect = () => {
     if (isConnecting || isConnected) return;
@@ -51,84 +44,15 @@ const App = () => {
     if (protocol.current === "WEBRTC_PROTOCOL") {
       handlePlayRef.current();
     } else {
-      try {
-        // For web, ensure we use the correct WebSocket URL
-        const wsUrl = Platform.OS === 'web' && serverUrl.includes('localhost') 
-          ? serverUrl.replace('localhost', window.location.hostname)
-          : serverUrl;
-        
-        wsRef.current = new WebSocket(wsUrl);
-        
-        wsRef.current.onopen = () => {
-          setIsConnected(true);
-          setIsConnecting(false);
-          console.log('Connected to WebSocket server');
-        };
-        
-        wsRef.current.onmessage = (event) => {
-          try {
-            const message = JSON.parse(event.data);
-            if (message.type === 'frame') {
-              // CRITICAL: Frame throttling to prevent memory overflow
-              const now = Date.now();
-              if (now - lastUpdateRef.current < MIN_FRAME_INTERVAL) {
-                // Skip this frame - too soon since last update
-                return;
-              }
-              
-              lastUpdateRef.current = now;
-              frameCountRef.current += 1;
-              
-              // Create new URI
-              const uri = `data:image/jpeg;base64,${message.data}`;
-              
-              // Clear old URI reference to help GC
-              lastUriRef.current = null;
-              
-              setImageUri(uri);
-              lastUriRef.current = uri;
-              setLastFrameTime(new Date().toLocaleTimeString());
-              
-            } else if (message.type === 'client_count') {
-              setClientCount(message.count);
-            }
-          } catch (error) {
-            console.error('Error parsing message:', error);
-          }
-        };
-        
-        wsRef.current.onclose = (event) => {
-          setIsConnected(false);
-          setIsConnecting(false);
-          setImageUri(null);
-          lastUriRef.current = null;
-          frameCountRef.current = 0;
-          console.log('Disconnected from WebSocket server', event.code, event.reason);
-        };
-        
-        wsRef.current.onerror = (error) => {
-          setIsConnecting(false);
-          showAlert('Connection Error', 'Failed to connect to server');
-          console.error('WebSocket error:', error);
-        };
-      } catch (error) {
-        setIsConnecting(false);
-        showAlert('Connection Error', 'Invalid server URL');
-      }
+      wsHandlePlayRef.current();
     }
   };
 
   const disconnect = () => {
     if (protocol.current === "WEBRTC_PROTOCOL") {
-      handleStopRef.current();
+      webrtcHandleStopRef.current();
     } else {
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-      setImageUri(null);
-      lastUriRef.current = null;
-      frameCountRef.current = 0;
+      wsHandleStopRef.current();
     }
   };
 
@@ -171,36 +95,21 @@ const App = () => {
 
   useEffect(() => {
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-      // Cleanup references
-      setImageUri(null);
-      lastUriRef.current = null;
+      wsHandleStopRef.current();
     };
   }, []);
 
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
-        <View style={styles.videoContainer}>
-          <CachedVideoPlayer 
-            imageUri={imageUri}
-            frameCountRef={frameCountRef}
-            styles={styles}
-          />
-          {!imageUri && (
-            <View style={styles.noVideoContainer}>
-              <Text style={styles.noVideoText}>
-                {isConnected ? 'Waiting for video frames...' : 'Connect to server to view stream'}
-              </Text>
-            </View>
-          )}
-        </View>
-
+        <CachedVideoPlayer
+          imageUri={imageUri}
+          frameCountRef={frameCountRef}
+          styles={styles}
+          isConnected={isConnected}
+        />
         <LiveVideoPlayer isConnected={isConnected} />
         
-        <StatusBar style="light" backgroundColor="#1a1a1a" />
 
         <View style={styles.connectionContainer}>
           <TouchableOpacity
