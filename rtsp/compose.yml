@@ -20,6 +20,24 @@ services:
       - 7080:7080
       - 2346:2345
 
+  web_rtc_signaling:
+    build: 
+      context: ./broadcaster/
+      dockerfile: ./docker/DockerfileSignaling
+    ports:
+      - 7070:7070
+      - 2347:2345
+
+  web_rtc_offeror:
+    build: 
+      context: ./broadcaster/
+      dockerfile: ./docker/DockerfileOfferor
+    ports:
+      - 2348:2345
+    shm_size: 256m
+    tmpfs:
+      - /shared:size=256m
+
   camera:
     build: 
       context: ./camera/
