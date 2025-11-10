@@ -20,6 +20,14 @@ def write_frame_to_shared_memory(buffer, type_, shm_name="video_frame"):
     os.rename(temp_path, shm_path)
 
 
+def read_frame_from_shared_memory(shm_name="video_frame"):
+    with open(f"/dev/shm/{shm_name}", "rb") as f:
+        header = f.read(5)
+        type_, data_length = struct.unpack("<bI", header)
+        data = f.read(data_length)
+    return data, type_
+
+
 class VideoSaver:
     video = None
     name = ""

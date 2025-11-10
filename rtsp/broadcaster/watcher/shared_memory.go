@@ -79,7 +79,7 @@ func NewSharedMemoryReceiver(shmName string) (*SharedMemoryReceiver, error) {
 	return NewSharedMemoryReceiverWithConfig(shmName, DefaultConfigProvider{})
 }
 
-func (smr *SharedMemoryReceiver) readFrameFromShm() ([]byte, int, error) {
+func (smr *SharedMemoryReceiver) ReadFrameFromShm() ([]byte, int, error) {
 	// Check if file exists
 	detected := -1
 	if _, err := os.Stat(smr.shmPath); os.IsNotExist(err) {
@@ -119,7 +119,7 @@ func (smr *SharedMemoryReceiver) logStats(actualFps float64, frameLength int, de
 }
 func (smr *SharedMemoryReceiver) GetBaseDir() string {
 	year, month, day := time.Now().Date()
-	return fmt.Sprintf("%s/%d-%02d-%02d", smr.savePath, year, month, day)					
+	return fmt.Sprintf("%s/%d-%02d-%02d", smr.savePath, year, month, day)
 }
 func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 	log.Println("Starting shared memory watcher...")
@@ -141,7 +141,7 @@ func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 			if event.Name == smr.shmPath &&
 				(event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create) {
 
-				frameData, detected, err := smr.readFrameFromShm()
+				frameData, detected, err := smr.ReadFrameFromShm()
 				if err != nil {
 					log.Printf("Error reading frame from shared memory: %v", err)
 					continue

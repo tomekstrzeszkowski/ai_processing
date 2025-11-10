@@ -39,7 +39,7 @@ class Drawer:
             cv2.putText(
                 self.frame,
                 type_verbose.title(),
-                (x0 + 10, y0 + 20),
+                (x0 + 10, y0 - 5),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.8,
                 color,
