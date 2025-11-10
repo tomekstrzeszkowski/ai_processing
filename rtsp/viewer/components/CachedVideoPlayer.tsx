@@ -1,19 +1,17 @@
+import { useWebSocket } from '@/app/websocketProvider';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 
 interface CachedVideoPlayerProps {
-  imageUri: string | null;
-  frameCountRef: React.RefObject<number>;
   styles: any;
   isConnected: boolean;
 }
 
 export const CachedVideoPlayer: React.FC<CachedVideoPlayerProps> = ({ 
-  imageUri, 
-  frameCountRef, 
   styles,
   isConnected
 }) => {
+  const { imageUri } = useWebSocket();
   const [isLoading, setIsLoading] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
   

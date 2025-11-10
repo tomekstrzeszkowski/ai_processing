@@ -1,3 +1,4 @@
+import { useProtocol } from '@/app/protocolProvider';
 import { SignalingMessage } from '@/helpers/message';
 import { WebSocketSignalingClient } from '@/helpers/signaling';
 import { WebRtcOfferee } from '@/helpers/webRtc';
@@ -6,9 +7,8 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 type WebRtcContextType = {
   remoteStream: MediaStream | null;
   videoRef: React.RefObject<HTMLVideoElement | null>;
-  isConnected: boolean;
-  handlePlayRef: React.RefObject<EventListenerOrEventListenerObject>;
-  handleStopRef: React.RefObject<EventListenerOrEventListenerObject>;
+  handlePlayRef: React.RefObject<Function>;
+  handleStopRef: React.RefObject<Function>;
 };
 
 const WebRtcContext = createContext<WebRtcContextType | null>(null);
@@ -23,22 +23,24 @@ export const useWebRtc = () => {
   
 export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const {setIsConnected, setIsConnecting, setLastFrameTime, isConnected } = useProtocol();
   const videoRef = useRef<HTMLVideoElement>(null);
-  const handlePlayRef = useRef<EventListenerOrEventListenerObject>(() => {});
-  const handleStopRef = useRef<EventListenerOrEventListenerObject>(() => {});
+  const frameInterval = useRef<number | null>(null);
+  const handlePlayRef = useRef<Function>(() => {});
+  const handleStopRef = useRef<Function>(() => {});
   const offereeRef = useRef<WebRtcOfferee>(new WebRtcOfferee((state) => {
+    setIsConnecting(false);
     setIsConnected(state === "connected");
   }, (stream) => {
     setRemoteStream(stream);
   }));
-  const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
     const host = document.location.hostname || 'localhost';
     const signalingServerUrl = `ws://${host}:7070/ws`;
     const signalingClient = new WebSocketSignalingClient(52, signalingServerUrl);
-    videoRef.current?.addEventListener("play", handlePlayRef.current);
-    videoRef.current?.addEventListener("pause", handleStopRef.current);
+    videoRef.current?.addEventListener("play", () => handlePlayRef.current());
+    videoRef.current?.addEventListener("pause", () => handleStopRef.current());
 
     handlePlayRef.current = async () => {
         const offeree = offereeRef.current;
@@ -81,22 +83,33 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
       console.log("Cleaning up WebRTC connections");
     }
   }, []);
-  // Update video element when stream changes
   useEffect(() => {
     if (videoRef.current && remoteStream) {
       videoRef.current.srcObject = remoteStream;
+      setLastFrameTime(new Date());
     }
   }, [remoteStream]);
 
-  const value = {
-    remoteStream,
-    videoRef,
-    handlePlayRef,
-    handleStopRef,
-    isConnected,
-  };
+  useEffect(() => {
+    if (isConnected) {
+      if (!frameInterval.current) {
+        frameInterval.current = setInterval(() => {
+          setLastFrameTime(new Date());
+        }, 1000);
+      }
+    } else {
+      if (frameInterval.current) {
+        clearInterval(frameInterval.current);
+      }
+    }
+  }, [isConnected]);
   return (
-    <WebRtcContext.Provider value={value}>
+    <WebRtcContext.Provider value={{
+      remoteStream,
+      videoRef,
+      handlePlayRef,
+      handleStopRef,
+    }}>
       {children}
     </WebRtcContext.Provider>
   );

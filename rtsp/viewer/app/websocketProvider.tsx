@@ -1,4 +1,5 @@
-import { createContext, useContext, useRef, useState } from 'react';
+import { useProtocol } from '@/app/protocolProvider';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Platform
@@ -8,8 +9,10 @@ type WebSocketContextType = {
   wsRef: React.RefObject<WebSocket | null>;
   isConnecting: boolean;
   setIsConnecting: (isConnecting: boolean) => void;
-  serverUrl: string;
   httpServerUrl: string;
+  handlePlayRef: React.RefObject<Function>;
+  handleStopRef: React.RefObject<Function>;
+  imageUri: string | null;
 };
 
 const WebSocketContext = createContext<WebSocketContextType | null>(null);
@@ -30,17 +33,14 @@ export const useWebSocket = () => {
 
 export const WebSocketProvider = ({ children }: { children: React.ReactNode }) => {
   const wsRef = useRef<WebSocket>(null);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
+  const {setIsConnected, setIsConnecting, isConnected, setLastFrameTime } = useProtocol();
   const lastUpdateRef = useRef(0);
   const MIN_FRAME_INTERVAL = 33; // ~30fps max (adjust as needed)
   const host = document.location.hostname || 'localhost';
   const [serverUrl, ] = useState(`ws://${host}:7080/ws`);
   const [httpServerUrl, ] = useState(`http://${host}:7080`);
-  const frameCountRef = useRef(0);
   const [imageUri, setImageUri] = useState<string | null>(null);
-  const [lastFrameTime, setLastFrameTime] = useState<string | null>(null);
-  const [clientCount, setClientCount] = useState(0);
+  const [_, setClientCount] = useState(0);
   const handlePlayRef = useRef<Function>(() => {});
   const handleStopRef = useRef<Function>(() => {})
 
@@ -71,13 +71,12 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
             }
             
             lastUpdateRef.current = now;
-            frameCountRef.current += 1;
             
             // Create new URI
             const uri = `data:image/jpeg;base64,${message.data}`;
             
             setImageUri(uri);
-            setLastFrameTime(new Date().toLocaleTimeString());
+            setLastFrameTime(new Date());
             
           } else if (message.type === 'client_count') {
             setClientCount(message.count);
@@ -91,7 +90,6 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
         setIsConnected(false);
         setIsConnecting(false);
         setImageUri(null);
-        frameCountRef.current = 0;
         console.log('Disconnected from WebSocket server', event.code, event.reason);
       };
       
@@ -112,23 +110,41 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
         wsRef.current = null;
       }
       setImageUri(null);
-      frameCountRef.current = 0;
   }
 
+  const fetchStatus = async () => {
+    try {
+      const finalUrl = `${httpServerUrl}/status`;
+      const response = await fetch(finalUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setClientCount(data.clients || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching status:', error);
+    }
+  };
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (isConnected) {
+        fetchStatus();
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [isConnected]);
   const value = {
-    wsRef, 
-    isConnecting, 
-    setIsConnecting, 
-    serverUrl, 
+    wsRef,
+    setIsConnecting,
     httpServerUrl, 
     handlePlayRef,
-    isConnected, 
     imageUri,
-    frameCountRef,
-    clientCount,
-    lastFrameTime,
-    setClientCount,
-    setImageUri,
     handleStopRef,
   };
   return (

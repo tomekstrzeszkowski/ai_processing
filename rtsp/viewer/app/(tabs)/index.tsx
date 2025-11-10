@@ -1,9 +1,11 @@
+import { useProtocol } from '@/app/protocolProvider';
+import { useWebRtc } from '@/app/webRtcProvider';
+import { useWebSocket } from '@/app/websocketProvider';
 import { CachedVideoPlayer } from '@/components/CachedVideoPlayer';
 import { LiveVideoPlayer } from '@/components/LiveVideoPlayer';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import {
   ActivityIndicator,
-  Dimensions,
   Platform,
   StyleSheet,
   Text,
@@ -11,38 +13,23 @@ import {
   View
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { useProtocol } from '../protocolProvider';
-import { useWebRtc } from '../webRtcProvider';
-import { useWebSocket } from '../websocketProvider';
-
-const { width, height } = Dimensions.get('window');
 
 const App = () => {
-  const lastUriRef = useRef(null);
-
-  
+  const { protocol, isConnected, isConnecting, setIsConnecting, lastFrameTime } = useProtocol();
   const {
-    isConnecting, 
-    setIsConnecting, 
-    serverUrl, 
-    httpServerUrl, 
-    handlePlayRef: wsHandlePlayRef, 
-    isConnected, 
-    imageUri,
-    frameCountRef,
-    clientCount,
-    lastFrameTime,
-    setClientCount,
+    handlePlayRef: wsHandlePlayRef,
     handleStopRef: wsHandleStopRef,
   } = useWebSocket();
-  const { protocol } = useProtocol();
-  const { handlePlayRef, handleStopRef: webrtcHandleStopRef, isConnected: isWebRtcConnected } = useWebRtc();
+  const { 
+    handlePlayRef: webrtcHandlePlayRef, 
+    handleStopRef: webrtcHandleStopRef,
+  } = useWebRtc();
 
   const connect = () => {
     if (isConnecting || isConnected) return;
     setIsConnecting(true);
     if (protocol.current === "WEBRTC_PROTOCOL") {
-      handlePlayRef.current();
+      webrtcHandlePlayRef.current();
     } else {
       wsHandlePlayRef.current();
     }
@@ -56,43 +43,6 @@ const App = () => {
     }
   };
 
-  const fetchStatus = async () => {
-    try {
-      const finalUrl = `${httpServerUrl}/status`;
-      const response = await fetch(finalUrl, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setClientCount(data.clients || 0);
-      }
-    } catch (error) {
-      console.error('Error fetching status:', error);
-    }
-  };
-  useEffect(() => {
-    if (protocol.current === "WEBRTC_PROTOCOL") {
-      console.log('WebRTC connection state changed:', isWebRtcConnected);
-      setIsConnected(isWebRtcConnected);
-      if (isWebRtcConnected) {
-        setIsConnecting(false);
-      }
-    }
-  }), [isWebRtcConnected];
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (isConnected) {
-        fetchStatus();
-      }
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [isConnected, serverUrl]);
-
   useEffect(() => {
     return () => {
       wsHandleStopRef.current();
@@ -102,12 +52,7 @@ const App = () => {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
-        <CachedVideoPlayer
-          imageUri={imageUri}
-          frameCountRef={frameCountRef}
-          styles={styles}
-          isConnected={isConnected}
-        />
+        <CachedVideoPlayer isConnected={isConnected} styles={styles} />
         <LiveVideoPlayer isConnected={isConnected} />
         
 
@@ -128,24 +73,10 @@ const App = () => {
         </View>
 
         <View style={styles.infoContainer}>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Platform:</Text>
-            <Text style={styles.infoValue}>{Platform.OS}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Connected Clients:</Text>
-            <Text style={styles.infoValue}>{clientCount}</Text>
-          </View>
           {lastFrameTime && (
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Last Frame:</Text>
+              <Text style={styles.infoLabel}>Last Signal:</Text>
               <Text style={styles.infoValue}>{lastFrameTime}</Text>
-            </View>
-          )}
-          {frameCountRef.current > 0 && (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Frames Received:</Text>
-              <Text style={styles.infoValue}>{frameCountRef.current}</Text>
             </View>
           )}
         </View>
