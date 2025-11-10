@@ -234,6 +234,26 @@ func RunLive(signalingUrl string) {
 	pc, err := webrtc.NewPeerConnection(webrtc.Configuration{
 		ICEServers: iceServers,
 	})
+	ordered := false
+	maxRetransmits := uint16(0)
+	dataChannel, err := pc.CreateDataChannel("tstrz-b-webrtc-app-v1.0.0", &webrtc.DataChannelInit{
+		Ordered:        &ordered,
+		MaxRetransmits: &maxRetransmits,
+	})
+	dataChannel.OnOpen(func() {
+		fmt.Println("Data channel opened")
+		dataChannel.SendText("hello from server")
+	})
+	dataChannel.OnClose(func() {
+		fmt.Println("Data channel closed")
+	})
+	dataChannel.OnMessage(func(msg webrtc.DataChannelMessage) {
+		fmt.Printf("Message from data channel: %s\n", string(msg.Data))
+	})
+	// Set up connection state handler
+	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
+		fmt.Printf("Connection state: %s\n", state.String())
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -260,11 +280,6 @@ func RunLive(signalingUrl string) {
 			}
 		}
 	}()
-
-	// Set up connection state handler
-	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
-		fmt.Printf("Connection state: %s\n", state.String())
-	})
 	wsClient, _, err := websocket.DefaultDialer.Dial(signalingUrl, nil)
 	if err != nil {
 		log.Fatal(err)

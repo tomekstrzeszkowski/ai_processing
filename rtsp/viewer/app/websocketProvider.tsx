@@ -36,7 +36,7 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
     setIsConnected, 
     setIsConnecting, 
     isConnected, 
-    setLastFrameTime 
+    setLastFrameTime,
   } = useProtocol();
   const lastUpdateRef = useRef(0);
   const MIN_FRAME_INTERVAL = 33; // ~30fps max (adjust as needed)
