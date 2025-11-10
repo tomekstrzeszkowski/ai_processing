@@ -51,8 +51,10 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
     videoRef.current?.addEventListener("pause", handlePause);
 
     handlePlayRef.current = async () => {
-        if (!isWebRtc) return;
         const offeree = offereeRef.current;
+        if (!isWebRtc || ["connected", "connecting"].includes(offeree.pc?.connectionState ?? "")) {
+            return;
+        }
         await signalingClient.connect();
         offeree.initializePeerConnection();
         signalingClient.onIce(async candidates => {
