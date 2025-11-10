@@ -37,6 +37,7 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
     setIsConnecting, 
     isConnected, 
     setLastFrameTime,
+    isWebRtc,
   } = useProtocol();
   const lastUpdateRef = useRef(0);
   const MIN_FRAME_INTERVAL = 33; // ~30fps max (adjust as needed)
@@ -49,6 +50,7 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
   const handleStopRef = useRef<Function>(() => {})
 
   handlePlayRef.current = function () {
+    if (isWebRtc) return;
     try {
       // For web, ensure we use the correct WebSocket URL
       const wsUrl = Platform.OS === 'web' && serverUrl.includes('localhost') 
@@ -117,6 +119,7 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
   }
 
   const fetchStatus = async () => {
+    if (isWebRtc) return;
     try {
       const finalUrl = `${httpServerUrl}/status`;
       const response = await fetch(finalUrl, {

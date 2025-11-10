@@ -24,7 +24,7 @@ export const ProtocolProvider = ({ children }: { children: React.ReactNode }) =>
   const [protocol, setProtocol] = useState<string>("WEBRTC_PROTOCOL");
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [isWebRtc, setIsWebRtc] = useState(false);
+  const [isWebRtc, setIsWebRtc] = useState(true);
   const [lastFrameTime, setLastFrameTime] = useState<string | null>(null);
   function handleSetLastFrameTime(time: Date) {
     setLastFrameTime(time.toLocaleTimeString());

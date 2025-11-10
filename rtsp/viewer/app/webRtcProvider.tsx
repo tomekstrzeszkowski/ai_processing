@@ -23,7 +23,13 @@ export const useWebRtc = () => {
   
 export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
-  const {setIsConnected, setIsConnecting, setLastFrameTime, isConnected } = useProtocol();
+  const {
+    setIsConnected, 
+    setIsConnecting, 
+    setLastFrameTime, 
+    isConnected,
+    isWebRtc,
+  } = useProtocol();
   const videoRef = useRef<HTMLVideoElement>(null);
   const frameInterval = useRef<number | null>(null);
   const handlePlayRef = useRef<Function>(() => {});
@@ -45,6 +51,7 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
     videoRef.current?.addEventListener("pause", handlePause);
 
     handlePlayRef.current = async () => {
+        if (!isWebRtc) return;
         const offeree = offereeRef.current;
         await signalingClient.connect();
         offeree.initializePeerConnection();
