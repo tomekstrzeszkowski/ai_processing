@@ -34,6 +34,8 @@ services:
       dockerfile: ./docker/DockerfileOfferor
     ports:
       - 2348:2345
+    volumes:
+      - shared_memory:/dev/shm
     shm_size: 256m
     tmpfs:
       - /shared:size=256m
