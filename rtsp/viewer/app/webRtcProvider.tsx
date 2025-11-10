@@ -39,8 +39,10 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
     const host = document.location.hostname || 'localhost';
     const signalingServerUrl = `ws://${host}:7070/ws`;
     const signalingClient = new WebSocketSignalingClient(52, signalingServerUrl);
-    videoRef.current?.addEventListener("play", () => handlePlayRef.current());
-    videoRef.current?.addEventListener("pause", () => handleStopRef.current());
+    const handlePlay = () => handlePlayRef.current();
+    const handlePause = () => () => handleStopRef.current();
+    videoRef.current?.addEventListener("play", handlePlay);
+    videoRef.current?.addEventListener("pause", handlePause);
 
     handlePlayRef.current = async () => {
         const offeree = offereeRef.current;
@@ -50,7 +52,7 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
           try{
             await offeree.handleIceCandidates({ice: candidates.ice as RTCIceCandidate[]});
           } catch (error) {
-            console.error("Error handling ICE candidates:", error);
+            console.error("Error handling ICE candidates:", error, candidates);
           }
         }); 
         signalingClient.onOffer(async (offer: SignalingMessage) => {
@@ -64,11 +66,18 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
           const sdp = String(offer.sdp);
           console.log("signaling state", offeree.pc?.signalingState);
           await offeree.pc?.setRemoteDescription({sdp, type: 'offer'});
+          if (offeree.pc?.signalingState === "stable") return;
           const answer = await offeree.pc?.createAnswer();
-          await offeree.pc?.setLocalDescription(answer);
+          try {
+            await offeree.pc?.setLocalDescription(answer);
+          } catch (error) {
+            console.log('error', error)
+            return;
+          }
           if(!answer) return;
           signalingClient.sendAnswer(answer);
           await offeree.waitForCandidates();
+          console.log("icCandidates Generated", offeree.iceCandidatesGenerated)
           signalingClient.sendIceCandidates(offeree.iceCandidatesGenerated);
         });
     };
@@ -76,11 +85,12 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
       signalingClient.disconnect();
       offereeRef.current.close();
       setIsConnected(false);
-      videoRef.current?.removeEventListener("play", handlePlayRef.current);
-      videoRef.current?.removeEventListener("pause", handleStopRef.current);
+      videoRef.current?.removeEventListener("play", handlePlay);
+      videoRef.current?.removeEventListener("pause", handlePause);
     };
     return () => {
       console.log("Cleaning up WebRTC connections");
+      offereeRef.current.close();
     }
   }, []);
   useEffect(() => {

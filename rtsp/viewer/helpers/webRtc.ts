@@ -52,6 +52,10 @@ export class WebRtcOfferee{
     }  
 
     initializePeerConnection() {
+        if (this.pc) {
+            this.close();
+        }
+        this.pc = null;
         this.pc = new RTCPeerConnection(this.configuration);
         this.handlePC();
         this.handleDataChannel()
