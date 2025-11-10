@@ -8,7 +8,13 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({isConnected}) =
   const { videoRef } = useWebRtc();
 
   return (
-    <div className="video-container">
+    <div style={{
+      display: "flex", 
+      flex: 1, 
+      flexDirection: "column" ,
+      justifyContent: "center",
+      alignItems: "center"
+    }}>
       <video 
           controls
           style={{ display: isConnected ? "flex": "none", margin:"auto" }}
@@ -16,7 +22,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({isConnected}) =
           autoPlay 
           playsInline
       />
-      {!isConnected && <div style={{display: "flex"}}>No video.</div>}
+      {!isConnected && <div style={{display: "flex", alignSelf: "center"}}>Connect to view stream</div>}
     </div>
   );
 }

@@ -3,12 +3,10 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 
 interface CachedVideoPlayerProps {
-  styles: any;
   isConnected: boolean;
 }
 
-export const CachedVideoPlayer: React.FC<CachedVideoPlayerProps> = ({ 
-  styles,
+export const CachedVideoPlayer: React.FC<CachedVideoPlayerProps> = ({
   isConnected
 }) => {
   const { imageUri } = useWebSocket();
@@ -161,32 +159,24 @@ export const CachedVideoPlayer: React.FC<CachedVideoPlayerProps> = ({
   }, [destroyImage]);
 
   return (
-    <View style={styles.videoContainer}>
-      <div 
-        style={{
-          ...styles.videoContainer,
-          position: 'relative',
-          overflow: 'hidden'
-        }} 
-        ref={containerRef}
-      >
+    <View style={{
+      display: "flex", 
+      flex: 1, 
+      flexDirection: "column" ,
+      justifyContent: "center",
+      alignItems: "center"
+    }}>
+      <div ref={containerRef}>
         {isLoading && !hasInitialized && (
-          <div style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            zIndex: 1,
-            color: '#666'
-          }}>
+          <div>
             Loading...
           </div>
         )}
       </div>
       {!imageUri && (
-        <View style={styles.noVideoContainer}>
-          <Text style={styles.noVideoText}>
-            {isConnected ? 'Waiting for video frames...' : 'Connect to server to view stream'}
+        <View>
+          <Text style={{ color: "#b9b9b9ff", display: "flex", alignSelf: "center"}}>
+            {isConnected ? 'Waiting for video...' : 'Connect to view stream'}
           </Text>
         </View>
       )}

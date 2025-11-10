@@ -7,7 +7,6 @@ import {
 
 type WebSocketContextType = {
   wsRef: React.RefObject<WebSocket | null>;
-  isConnecting: boolean;
   setIsConnecting: (isConnecting: boolean) => void;
   httpServerUrl: string;
   handlePlayRef: React.RefObject<Function>;
@@ -33,7 +32,12 @@ export const useWebSocket = () => {
 
 export const WebSocketProvider = ({ children }: { children: React.ReactNode }) => {
   const wsRef = useRef<WebSocket>(null);
-  const {setIsConnected, setIsConnecting, isConnected, setLastFrameTime } = useProtocol();
+  const {
+    setIsConnected, 
+    setIsConnecting, 
+    isConnected, 
+    setLastFrameTime 
+  } = useProtocol();
   const lastUpdateRef = useRef(0);
   const MIN_FRAME_INTERVAL = 33; // ~30fps max (adjust as needed)
   const host = document.location.hostname || 'localhost';
@@ -139,16 +143,15 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
 
     return () => clearInterval(interval);
   }, [isConnected]);
-  const value = {
-    wsRef,
-    setIsConnecting,
-    httpServerUrl, 
-    handlePlayRef,
-    imageUri,
-    handleStopRef,
-  };
   return (
-    <WebSocketContext.Provider value={value}>
+    <WebSocketContext.Provider value={{
+      wsRef,
+      setIsConnecting,
+      httpServerUrl, 
+      handlePlayRef,
+      imageUri,
+      handleStopRef,
+    }}>
       {children}
     </WebSocketContext.Provider>
   );

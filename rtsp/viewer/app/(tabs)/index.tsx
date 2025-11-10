@@ -6,7 +6,6 @@ import { LiveVideoPlayer } from '@/components/LiveVideoPlayer';
 import React, { useEffect } from 'react';
 import {
   ActivityIndicator,
-  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -15,20 +14,20 @@ import {
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 const App = () => {
-  const { protocol, isConnected, isConnecting, setIsConnecting, lastFrameTime } = useProtocol();
-  const {
-    handlePlayRef: wsHandlePlayRef,
-    handleStopRef: wsHandleStopRef,
-  } = useWebSocket();
   const { 
-    handlePlayRef: webrtcHandlePlayRef, 
-    handleStopRef: webrtcHandleStopRef,
-  } = useWebRtc();
+    isConnected, 
+    isConnecting, 
+    setIsConnecting, 
+    lastFrameTime,
+    isWebRtc,
+  } = useProtocol();
+  const { handlePlayRef: wsHandlePlayRef, handleStopRef: wsHandleStopRef } = useWebSocket();
+  const { handlePlayRef: webrtcHandlePlayRef, handleStopRef: webrtcHandleStopRef } = useWebRtc();
 
   const connect = () => {
     if (isConnecting || isConnected) return;
     setIsConnecting(true);
-    if (protocol.current === "WEBRTC_PROTOCOL") {
+    if (isWebRtc) {
       webrtcHandlePlayRef.current();
     } else {
       wsHandlePlayRef.current();
@@ -36,7 +35,7 @@ const App = () => {
   };
 
   const disconnect = () => {
-    if (protocol.current === "WEBRTC_PROTOCOL") {
+    if (isWebRtc) {
       webrtcHandleStopRef.current();
     } else {
       wsHandleStopRef.current();
@@ -52,9 +51,8 @@ const App = () => {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
-        <CachedVideoPlayer isConnected={isConnected} styles={styles} />
-        <LiveVideoPlayer isConnected={isConnected} />
-        
+        {isWebRtc && <LiveVideoPlayer isConnected={isConnected} />}
+        {!isWebRtc && <CachedVideoPlayer isConnected={isConnected} styles={styles} />}
 
         <View style={styles.connectionContainer}>
           <TouchableOpacity
@@ -65,18 +63,18 @@ const App = () => {
             {isConnecting ? (
               <ActivityIndicator color="#fff" size="small" />
             ) : (
-              <Text style={styles.buttonText}>
+              <Text style={{color: "#fff", fontWeight: 700}}>
                 {isConnected ? 'Disconnect' : 'Connect'}
               </Text>
             )}
           </TouchableOpacity>
         </View>
 
-        <View style={styles.infoContainer}>
+        <View>
           {lastFrameTime && (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Last Signal:</Text>
-              <Text style={styles.infoValue}>{lastFrameTime}</Text>
+            <View style={{ flex: 1, color: "white", padding: 20}}>
+              <Text style={{color: "white"}}>Last Signal:</Text>
+              <Text style={{color: "white"}}>{lastFrameTime}</Text>
             </View>
           )}
         </View>
@@ -89,58 +87,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#1a1a1a',
-    ...(Platform.OS === 'web' && {
-      maxHeight: '100vh',
-      overflow: 'hidden',
-    }),
-  },
-  header: {
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  statusContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  statusText: {
-    color: '#fff',
-    fontSize: 16,
+    color: "#b9b9b9ff",
   },
   connectionContainer: {
     padding: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#333',
-  },
-  label: {
-    color: '#fff',
-    fontSize: 16,
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: '#333',
-    color: '#fff',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 15,
-    fontSize: 16,
-    ...(Platform.OS === 'web' && {
-      outlineStyle: 'none',
-    }),
   },
   button: {
     padding: 15,
@@ -154,66 +106,6 @@ const styles = StyleSheet.create({
   },
   disconnectButton: {
     backgroundColor: '#f44336',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  videoContainer: {
-    flex: 1,
-    margin: 20,
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: '#000',
-    position: 'relative',
-  },
-  video: {
-    width: '100%',
-    height: '100%',
-  },
-  noVideoContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#000',
-  },
-  noVideoText: {
-    color: '#666',
-    fontSize: 16,
-    textAlign: 'center',
-    paddingHorizontal: 20,
-  },
-  placeholderIcon: {
-    width: 48,
-    height: 48,
-    marginBottom: 16,
-  },
-  loading: {
-    opacity: 0.8,
-  },
-  infoContainer: {
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#333',
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  infoLabel: {
-    color: '#999',
-    fontSize: 14,
-  },
-  infoValue: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
   },
 });
 
