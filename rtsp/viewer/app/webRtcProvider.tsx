@@ -37,6 +37,7 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
   const offereeRef = useRef<WebRtcOfferee>(new WebRtcOfferee((state) => {
     setIsConnecting(false);
     setIsConnected(state === "connected");
+    // TODO: if disconnected try to reset saved offert via dataChannel
   }, (stream) => {
     setRemoteStream(stream);
   }));
