@@ -89,6 +89,16 @@ func (o *Offeror) HandlePeerConnection() {
 	})
 }
 
+func (o *Offeror) SendDisconnectedMessageToSignaling() {
+	disconnectedMessage, err := json.Marshal(map[string]string{"type": "disconnected"})
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := o.wsClient.WriteMessage(websocket.TextMessage, disconnectedMessage); err != nil {
+		log.Fatal(err)
+	}
+}
+
 func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 	ordered := false
 	maxRetransmits := uint16(0)
@@ -102,6 +112,8 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 	dataChannel.OnOpen(func() {
 		fmt.Println("Data channel opened")
 		dataChannel.SendText("hello from server")
+		// reset offert so it can't be reused
+		o.SendDisconnectedMessageToSignaling()
 	})
 	dataChannel.OnClose(func() {
 		fmt.Println("Data channel closed")
@@ -128,11 +140,7 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 			if err != nil {
 				log.Fatal(err)
 			}
-			disconnectedMessage, err := json.Marshal(map[string]string{"type": "disconnected"})
-			if err := o.wsClient.WriteMessage(websocket.TextMessage, disconnectedMessage); err != nil {
-				log.Fatal(err)
-			}
-
+			o.SendDisconnectedMessageToSignaling()
 			if err := o.wsClient.WriteMessage(websocket.TextMessage, offerData); err != nil {
 				log.Fatal(err)
 			}

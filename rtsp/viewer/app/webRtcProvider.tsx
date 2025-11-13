@@ -37,7 +37,6 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
   const offereeRef = useRef<WebRtcOfferee>(new WebRtcOfferee((state) => {
     setIsConnecting(false);
     setIsConnected(state === "connected");
-    // TODO: if disconnected try to reset saved offert via dataChannel
   }, (stream) => {
     setRemoteStream(stream);
   }));
@@ -92,6 +91,10 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
         });
     };
     handleStopRef.current = () => {
+      if (offereeRef.current.dataChannel) {
+        signalingClient.ws?.send(JSON.stringify({type: "disconnected"}))
+        offereeRef.current.dataChannel.send(JSON.stringify({type: "close"}))
+      }
       signalingClient.disconnect();
       offereeRef.current.close();
       setIsConnected(false);
@@ -100,7 +103,8 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
     };
     return () => {
       console.log("Cleaning up WebRTC connections");
-      offereeRef.current.close();
+      //offereeRef.current.close();
+      handleStopRef.current();
     }
   }, []);
   useEffect(() => {
@@ -121,6 +125,7 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
       if (frameInterval.current) {
         clearInterval(frameInterval.current);
       }
+      handleStopRef.current();
     }
   }, [isConnected]);
   return (

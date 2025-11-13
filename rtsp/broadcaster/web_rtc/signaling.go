@@ -15,10 +15,11 @@ var clientsMux sync.RWMutex
 var upgrader websocket.Upgrader
 
 type connInfo struct {
-	conn     *websocket.Conn
-	writeMux sync.Mutex
-	ice      []SignalingMessage
-	offer    *SignalingMessage
+	conn      *websocket.Conn
+	writeMux  sync.Mutex
+	ice       []SignalingMessage
+	offer     *SignalingMessage
+	offerFrom int
 }
 
 func RunServer(port int) {
@@ -32,9 +33,10 @@ func RunServer(port int) {
 		userId, _ := strconv.Atoi(r.URL.Query().Get("userId"))
 		conn, _ := upgrader.Upgrade(w, r, nil)
 		client := &connInfo{
-			conn:  conn,
-			ice:   []SignalingMessage{},
-			offer: &SignalingMessage{},
+			conn:      conn,
+			ice:       []SignalingMessage{},
+			offer:     &SignalingMessage{},
+			offerFrom: 0,
 		}
 
 		clientsMux.Lock()
@@ -65,6 +67,7 @@ func RunServer(port int) {
 							log.Println("Write error:", err)
 						}
 						otherClient.offer = nil
+						client.offerFrom = otherUserId
 					}
 				}
 			}
@@ -73,6 +76,11 @@ func RunServer(port int) {
 
 		defer func() {
 			clientsMux.Lock()
+			if offeree, ok := clients[userId]; ok && offeree.offerFrom > 0 {
+				offeree.ice = []SignalingMessage{}
+				offeree.offer = nil
+				offeree.offerFrom = 0
+			}
 			delete(clients, userId)
 			clientsMux.Unlock()
 			conn.Close()
@@ -105,6 +113,9 @@ func RunServer(port int) {
 					otherClient.writeMux.Unlock()
 					if err != nil {
 						log.Println("Write error:", err)
+					}
+					if msg.Type == "offer" {
+						otherClient.offerFrom = userId
 					}
 				}
 			}

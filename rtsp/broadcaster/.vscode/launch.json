@@ -6,11 +6,11 @@
     "configurations": [
         
         {
-            "name": "Run Watcher",
+            "name": "Run script",
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}/cmd/provider/main.go"
+            "program": "${workspaceFolder}/cmd/web_rtc_server/signaling.go"
         },
         {
             "name": "Connect to server",
