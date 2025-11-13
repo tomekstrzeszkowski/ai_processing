@@ -10,7 +10,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({isConnected}) =
   return (
     <div style={{
       display: "flex", 
-      flex: 1, 
+      flex: 1,
       flexDirection: "column" ,
       justifyContent: "center",
       alignItems: "center"
