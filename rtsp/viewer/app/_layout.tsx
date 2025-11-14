@@ -6,9 +6,11 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 
-import { ProtocolProvider } from './protocolProvider';
-import { WebRtcProvider } from './webRtcProvider';
-import { WebSocketProvider } from './websocketProvider';
+import { HttpProvider } from '@/app/httpProvider';
+import { ProtocolProvider } from '@/app/protocolProvider';
+import { ToastProvider } from '@/app/toastProvider';
+import { WebRtcProvider } from '@/app/webRtcProvider';
+import { WebSocketProvider } from '@/app/websocketProvider';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -23,18 +25,22 @@ export default function RootLayout() {
   }
 
   return (
-    <ProtocolProvider>
-      <WebRtcProvider>
-        <WebSocketProvider>
-          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-            <Stack>
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="+not-found" />
-            </Stack>
-            <StatusBar style="auto" />
-          </ThemeProvider>
-        </WebSocketProvider>
-      </WebRtcProvider>
-    </ProtocolProvider>
+    <ToastProvider>
+      <ProtocolProvider>
+        <HttpProvider>
+          <WebRtcProvider>
+            <WebSocketProvider>
+              <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+                <Stack>
+                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                  <Stack.Screen name="+not-found" />
+                </Stack>
+                <StatusBar style="auto" />
+              </ThemeProvider>
+            </WebSocketProvider>
+          </WebRtcProvider>
+        </HttpProvider>
+     </ProtocolProvider>
+    </ToastProvider>
   );
 }

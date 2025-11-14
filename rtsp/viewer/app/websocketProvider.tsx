@@ -1,7 +1,7 @@
 import { useProtocol } from '@/app/protocolProvider';
+import { useToast } from '@/app/toastProvider';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   Platform
 } from 'react-native';
 
@@ -15,13 +15,6 @@ type WebSocketContextType = {
 };
 
 const WebSocketContext = createContext<WebSocketContextType | null>(null);
-const showAlert = (title: string, message: string) => {
-  if (Platform.OS === 'web') {
-    alert(`${title}: ${message}`);
-  } else {
-    Alert.alert(title, message);
-  }
-};
 export const useWebSocket = () => {
   const context = useContext(WebSocketContext);
   if (!context) {
@@ -39,6 +32,7 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
     setLastFrameTime,
     isWebRtc,
   } = useProtocol();
+  const { showAlert } = useToast();
   const lastUpdateRef = useRef(0);
   const MIN_FRAME_INTERVAL = 33; // ~30fps max (adjust as needed)
   const host = document.location.hostname || 'localhost';
