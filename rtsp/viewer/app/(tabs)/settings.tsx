@@ -20,6 +20,7 @@ export default () => {
             }>
             <Picker.Item label="WebRTC" value="WEBRTC_PROTOCOL" />
             <Picker.Item label="P2P" value="P2P_PROTOCOL" />
+            <Picker.Item label="HTTP: TODO" value="HTTP_PROTOCOL" />
           </Picker>
         </div>
       </SafeAreaView>

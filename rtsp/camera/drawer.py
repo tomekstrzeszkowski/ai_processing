@@ -3,11 +3,29 @@ import cv2
 from PIL import Image, ImageDraw, ImageFilter
 from dotenv import load_dotenv
 from datetime import datetime
+import numpy as np
 
 
 load_dotenv()
 
 SHOW_NOW_LABEL = bool(os.getenv("SHOW_NOW_LABEL", ""))
+
+
+def draw_rounded_rectangle(img, pt1, pt2, color, thickness, radius):
+    x1, y1 = pt1
+    x2, y2 = pt2
+    
+    # Draw straight lines
+    cv2.line(img, (x1 + radius, y1), (x2 - radius, y1), color, thickness)  # Top
+    cv2.line(img, (x1 + radius, y2), (x2 - radius, y2), color, thickness)  # Bottom
+    cv2.line(img, (x1, y1 + radius), (x1, y2 - radius), color, thickness)  # Left
+    cv2.line(img, (x2, y1 + radius), (x2, y2 - radius), color, thickness)  # Right
+    
+    # Draw corners as ellipses (quarter circles)
+    cv2.ellipse(img, (x1 + radius, y1 + radius), (radius, radius), 180, 0, 90, color, thickness)  # Top-left
+    cv2.ellipse(img, (x2 - radius, y1 + radius), (radius, radius), 270, 0, 90, color, thickness)  # Top-right
+    cv2.ellipse(img, (x1 + radius, y2 - radius), (radius, radius), 90, 0, 90, color, thickness)   # Bottom-left
+    cv2.ellipse(img, (x2 - radius, y2 - radius), (radius, radius), 0, 0, 90, color, thickness)    # Bottom-right
 
 
 class Drawer:
@@ -34,7 +52,7 @@ class Drawer:
 
     def rectangle(self, type_verbose, x0, y0, w, h):
         self.rectagle_count += 1
-        cv2.rectangle(self.frame, (x0, y0), (x0 + w, y0 + h), (0, 255, 0), 2)
+        draw_rounded_rectangle(self.frame, (x0, y0), (x0 + w, y0 + h), (0, 255, 0), 2, radius=5)
         for bold, color in ((5, (0, 0, 0)), (3, (255, 255, 255))):
             cv2.putText(
                 self.frame,

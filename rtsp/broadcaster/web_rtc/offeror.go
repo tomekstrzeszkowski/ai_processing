@@ -80,21 +80,31 @@ func (o *Offeror) HandlePeerConnection() {
 	o.dataChannel = dataChannel
 	o.pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		fmt.Printf("Connection state: %s\n", state.String())
-		if state == webrtc.PeerConnectionStateFailed {
+		switch state {
+		case webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateDisconnected:
 			connectionState, _ := json.Marshal(map[string]string{"type": "failed"})
 			if err := o.wsClient.WriteMessage(websocket.TextMessage, connectionState); err != nil {
 				log.Fatal(err)
 			}
 		}
 	})
+	o.pc.OnNegotiationNeeded(func() {
+		state := o.pc.ConnectionState()
+		switch state {
+		case webrtc.PeerConnectionStateNew:
+			return
+		}
+		fmt.Printf("Negotiation needed, create and send a new offer connection state: %s", state)
+		o.CreateAndSendOffer()
+	})
 }
 
-func (o *Offeror) SendDisconnectedMessageToSignaling() {
-	disconnectedMessage, err := json.Marshal(map[string]string{"type": "disconnected"})
+func (o *Offeror) SendFlushMessageToSignaling() {
+	flushMessage, err := json.Marshal(map[string]string{"type": "flush"})
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := o.wsClient.WriteMessage(websocket.TextMessage, disconnectedMessage); err != nil {
+	if err := o.wsClient.WriteMessage(websocket.TextMessage, flushMessage); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -113,7 +123,7 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 		fmt.Println("Data channel opened")
 		dataChannel.SendText("hello from server")
 		// reset offert so it can't be reused
-		o.SendDisconnectedMessageToSignaling()
+		o.SendFlushMessageToSignaling()
 	})
 	dataChannel.OnClose(func() {
 		fmt.Println("Data channel closed")
@@ -127,6 +137,7 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 		}
 		switch message.Type {
 		case "close":
+			// is it needed?
 			//recreate offer
 			offer, err := o.pc.CreateOffer(nil)
 			if err != nil {
@@ -140,7 +151,7 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 			if err != nil {
 				log.Fatal(err)
 			}
-			o.SendDisconnectedMessageToSignaling()
+			o.SendFlushMessageToSignaling()
 			if err := o.wsClient.WriteMessage(websocket.TextMessage, offerData); err != nil {
 				log.Fatal(err)
 			}

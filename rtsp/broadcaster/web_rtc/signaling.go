@@ -29,6 +29,11 @@ func RunServer(port int) {
 			return true // Allow all origins in development
 		},
 	}
+	go func() {
+		for clientId, client := range clients {
+			log.Printf("Client %d: offer from: %d", clientId, client.offerFrom)
+		}
+	}()
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		userId, _ := strconv.Atoi(r.URL.Query().Get("userId"))
 		conn, _ := upgrader.Upgrade(w, r, nil)
@@ -76,7 +81,8 @@ func RunServer(port int) {
 
 		defer func() {
 			clientsMux.Lock()
-			if offeree, ok := clients[userId]; ok && offeree.offerFrom > 0 {
+			if offeree, ok := clients[client.offerFrom]; ok {
+				fmt.Printf("Flush offer for %d", client.offerFrom)
 				offeree.ice = []SignalingMessage{}
 				offeree.offer = nil
 				offeree.offerFrom = 0
@@ -94,29 +100,35 @@ func RunServer(port int) {
 				break
 			}
 			log.Printf("Client %d has new message %s, client count: %d", userId, msg.Type, len(clients))
-			switch msg.Type {
-			case "ice":
-				client.ice = append(client.ice, msg)
-			case "offer":
-				client.offer = &msg
-			case "failed", "disconnected":
-				client.ice = []SignalingMessage{}
-				client.offer = nil
-				continue
-			}
 			clientsMux.RLock()
+			messageSent := false
 			for otherUserId, otherClient := range clients {
-				if otherUserId != userId {
+				if otherUserId != userId && (msg.Type == "ice" || msg.Type == "offer" || msg.Type == "answer") {
 					log.Printf("Send %s %d to %d", msg.Type, userId, otherUserId)
 					otherClient.writeMux.Lock()
 					err := otherClient.conn.WriteJSON(msg)
+					if msg.Type == "offer" {
+						otherClient.offerFrom = userId
+					}
 					otherClient.writeMux.Unlock()
 					if err != nil {
 						log.Println("Write error:", err)
 					}
-					if msg.Type == "offer" {
-						otherClient.offerFrom = userId
-					}
+					messageSent = true
+				}
+			}
+			//save message if it's not send
+			if !messageSent {
+				switch msg.Type {
+				case "ice":
+					client.ice = append(client.ice, msg)
+					log.Printf("Saved ice %d", userId)
+				case "offer":
+					client.offer = &msg
+					log.Printf("Saved offer %d", userId)
+				case "failed", "flush":
+					client.ice = []SignalingMessage{}
+					client.offer = nil
 				}
 			}
 			clientsMux.RUnlock()

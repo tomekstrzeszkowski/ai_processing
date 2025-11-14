@@ -30,6 +30,9 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
     isConnected,
     isWebRtc,
   } = useProtocol();
+  const host = document.location.hostname || 'localhost';
+  const signalingServerUrl = `ws://${host}:7070/ws`;
+  const signalingClient = new WebSocketSignalingClient(11, signalingServerUrl);
   const videoRef = useRef<HTMLVideoElement>(null);
   const frameInterval = useRef<number | null>(null);
   const handlePlayRef = useRef<Function>(() => {});
@@ -42,9 +45,6 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
   }));
 
   useEffect(() => {
-    const host = document.location.hostname || 'localhost';
-    const signalingServerUrl = `ws://${host}:7070/ws`;
-    const signalingClient = new WebSocketSignalingClient(52, signalingServerUrl);
     const handlePlay = () => handlePlayRef.current();
     const handlePause = () => () => handleStopRef.current();
     videoRef.current?.addEventListener("play", handlePlay);
@@ -55,7 +55,13 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
         if (!isWebRtc || ["connected", "connecting"].includes(offeree.pc?.connectionState ?? "")) {
             return;
         }
-        await signalingClient.connect();
+        try {
+          await signalingClient.connect();
+        } catch (err) {
+          setIsConnecting(false);
+          console.error(err);
+          return;
+        }
         offeree.initializePeerConnection();
         signalingClient.onIce(async candidates => {
           try{
@@ -65,6 +71,7 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
           }
         }); 
         signalingClient.onOffer(async (offer: SignalingMessage) => {
+          console.log('onOffer')
           if (offeree.pc?.connectionState === "closed" || offeree.pc?.signalingState === "closed") {
             //can be closed by other peer
             offeree.initializePeerConnection();
@@ -80,7 +87,7 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
           try {
             await offeree.pc?.setLocalDescription(answer);
           } catch (error) {
-            console.log('error', error)
+            console.error(error)
             return;
           }
           if(!answer) return;
