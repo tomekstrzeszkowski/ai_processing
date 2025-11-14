@@ -144,7 +144,13 @@ export default () => {
           ref={scrollViewRef}
           contentContainerStyle={styles.scrollContent}>
           <View>
-            <div>
+            <div style={{ 
+              display: 'flex', 
+              padding: 20, 
+              alignItems: 'center', 
+              alignSelf: 'center',
+              gap: 20
+            }}>
               <input
                 type="date"
                 value={startDate}

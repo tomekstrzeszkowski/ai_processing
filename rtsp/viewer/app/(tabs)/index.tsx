@@ -88,6 +88,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1a1a1a',
     color: "#b9b9b9ff",
+    overflow: "auto"
   },
   connectionContainer: {
     padding: 20,

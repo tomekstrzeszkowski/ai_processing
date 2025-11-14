@@ -1,4 +1,5 @@
 import { useProtocol } from '@/app/protocolProvider';
+import { useToast } from '@/app/toastProvider';
 import { SignalingMessage } from '@/helpers/message';
 import { WebSocketSignalingClient } from '@/helpers/signaling';
 import { WebRtcOfferee } from '@/helpers/webRtc';
@@ -30,6 +31,10 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
     isConnected,
     isWebRtc,
   } = useProtocol();
+  const { showAlert } = useToast();
+  const host = document.location.hostname || 'localhost';
+  const signalingServerUrl = `ws://${host}:7070/ws`;
+  const signalingClient = new WebSocketSignalingClient(11, signalingServerUrl);
   const videoRef = useRef<HTMLVideoElement>(null);
   const frameInterval = useRef<number | null>(null);
   const handlePlayRef = useRef<Function>(() => {});
@@ -42,9 +47,6 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
   }));
 
   useEffect(() => {
-    const host = document.location.hostname || 'localhost';
-    const signalingServerUrl = `ws://${host}:7070/ws`;
-    const signalingClient = new WebSocketSignalingClient(52, signalingServerUrl);
     const handlePlay = () => handlePlayRef.current();
     const handlePause = () => () => handleStopRef.current();
     videoRef.current?.addEventListener("play", handlePlay);
@@ -55,7 +57,15 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
         if (!isWebRtc || ["connected", "connecting"].includes(offeree.pc?.connectionState ?? "")) {
             return;
         }
-        await signalingClient.connect();
+        try {
+          await signalingClient.connect();
+          //signalingClient.ws?.send(JSON.stringify({"type": "start"}))
+        } catch (err) {
+          setIsConnecting(false);
+          console.error(err);
+          showAlert("Can not connect to signaling server. Try again later")
+          return;
+        }
         offeree.initializePeerConnection();
         signalingClient.onIce(async candidates => {
           try{
@@ -65,6 +75,7 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
           }
         }); 
         signalingClient.onOffer(async (offer: SignalingMessage) => {
+          console.log('onOffer')
           if (offeree.pc?.connectionState === "closed" || offeree.pc?.signalingState === "closed") {
             //can be closed by other peer
             offeree.initializePeerConnection();
@@ -80,7 +91,7 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
           try {
             await offeree.pc?.setLocalDescription(answer);
           } catch (error) {
-            console.log('error', error)
+            console.error(error)
             return;
           }
           if(!answer) return;
@@ -91,6 +102,10 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
         });
     };
     handleStopRef.current = () => {
+      if (offereeRef.current.dataChannel) {
+        signalingClient.ws?.send(JSON.stringify({type: "disconnected"}))
+        offereeRef.current.dataChannel.send(JSON.stringify({type: "close"}))
+      }
       signalingClient.disconnect();
       offereeRef.current.close();
       setIsConnected(false);
@@ -99,7 +114,8 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
     };
     return () => {
       console.log("Cleaning up WebRTC connections");
-      offereeRef.current.close();
+      //offereeRef.current.close();
+      handleStopRef.current();
     }
   }, []);
   useEffect(() => {
@@ -120,6 +136,7 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
       if (frameInterval.current) {
         clearInterval(frameInterval.current);
       }
+      handleStopRef.current();
     }
   }, [isConnected]);
   return (

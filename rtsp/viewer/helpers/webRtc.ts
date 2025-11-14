@@ -1,3 +1,4 @@
+
 export class WebRtcOfferee{
     pc: RTCPeerConnection | null = null;
     dataChannel: RTCDataChannel | undefined;
@@ -64,9 +65,10 @@ export class WebRtcOfferee{
     handlePC(stream: MediaStream|null = null) {
         if (this.pc === null) return;
         this.pc.addEventListener("negotiationneeded", async () => {
-            console.log("negotiation needed");
-            // const offer = await pc.createOffer();
-            // await this.pc.setLocalDescription(offer);
+            console.log("negotiation needed, wait for offer");
+            if (this.pc?.iceConnectionState === "failed") {
+                this.pc.restartIce();
+            }
         });
         if (stream) {
             stream.getTracks().forEach(track => {
@@ -83,6 +85,9 @@ export class WebRtcOfferee{
             this.onIceConnectionChange(this.pc?.iceConnectionState??"");
             if (this.pc?.iceConnectionState === "disconnected") {
                 this.close();
+            }
+            if (this.pc?.iceConnectionState === "failed") {
+                this.pc.restartIce();
             }
         });
         this.pc?.addEventListener("track", (event) => {
