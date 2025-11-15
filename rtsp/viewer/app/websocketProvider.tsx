@@ -12,6 +12,8 @@ type WebSocketContextType = {
   handlePlayRef: React.RefObject<Function>;
   handleStopRef: React.RefObject<Function>;
   imageUri: string | null;
+  fetchVideoList: Function;
+  fetchVideo: Function;
 };
 
 const WebSocketContext = createContext<WebSocketContextType | null>(null);
@@ -41,7 +43,7 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [_, setClientCount] = useState(0);
   const handlePlayRef = useRef<Function>(() => {});
-  const handleStopRef = useRef<Function>(() => {})
+  const handleStopRef = useRef<Function>(() => {});
 
   handlePlayRef.current = function () {
     if (isWebRtc) return;
@@ -140,6 +142,47 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
 
     return () => clearInterval(interval);
   }, [isConnected]);
+
+  async function fetchVideo(name: string): Promise<Object> {
+    const url = `${httpServerUrl}/video/${name}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'video/mp4,video/*'
+      },
+    });
+    
+    if (response.ok) {
+      // Get video data as ArrayBuffer
+      const buffer = await response.arrayBuffer();
+      console.log('Received video data, size:', buffer.byteLength);
+      
+      const bytes = new Uint8Array(buffer);
+      const videoUrl = URL.createObjectURL(new Blob([bytes], { type: 'video/mp4' }));
+      console.log('Created video URL:', videoUrl);
+      return {
+        name, videoUrl,
+      }
+    }
+    return {}
+  };
+
+  async function fetchVideoList(startDate: string, endDate: string): Promise<Array<Object>> {
+    const finalUrl = `${httpServerUrl}/video-list?start=${startDate}&end=${endDate}`;
+    const response = await fetch(finalUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      return data??[];
+    }
+    return [];
+  };
+
   return (
     <WebSocketContext.Provider value={{
       wsRef,
@@ -148,6 +191,8 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
       handlePlayRef,
       imageUri,
       handleStopRef,
+      fetchVideoList,
+      fetchVideo,
     }}>
       {children}
     </WebSocketContext.Provider>

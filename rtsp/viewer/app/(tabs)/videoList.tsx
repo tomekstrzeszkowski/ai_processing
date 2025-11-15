@@ -1,7 +1,9 @@
 import { VideoPlayer } from '@/components/VideoPlayer';
-import { useFocusEffect } from '@react-navigation/native';
 // No external converter needed
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useProtocol } from '@/app/protocolProvider';
+import { useWebRtc } from '@/app/webRtcProvider';
+import { useWebSocket } from '@/app/websocketProvider';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Button,
   Dimensions,
@@ -10,7 +12,6 @@ import {
   View
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { useWebSocket } from '../websocketProvider';
 
 const { width } = Dimensions.get('window');
 const ITEM_MARGIN = 5;
@@ -18,7 +19,9 @@ const ITEMS_PER_ROW = 6;
 const ITEM_WIDTH = (width - (ITEM_MARGIN * (ITEMS_PER_ROW + 1))) / ITEMS_PER_ROW;
 
 export default () => {
-  const { httpServerUrl } = useWebSocket();
+  const { isWebRtc } = useProtocol();
+  const { fetchVideoList: fetchVideoListWs, fetchVideo: fetchVideoWs } = useWebSocket();
+  const { handlePlayRef: webrtcHandlePlayRef, handleStopRef: webrtcHandleStopRef, offereeRef }= useWebRtc();
   const [items, setItems] = useState([]);
   const [videoData, setVideoData] = useState("");
   const [videoName, setVideoName] = useState("");
@@ -67,63 +70,27 @@ export default () => {
   }
   const fetchVideoList = async (startDate: string, endDate: string) => {
     setItems([]);
-    try {
-      const finalUrl = `${httpServerUrl}/video-list?start=${startDate}&end=${endDate}`;
-      const response = await fetch(finalUrl, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setItems(data??[]);
+    let items;
+    if (isWebRtc) {
+      if (!offereeRef.current.isConnected()) {
+        await webrtcHandlePlayRef.current();
       }
-    } catch (error) {
-      console.error('Error fetching status:', error);
+      items = await offereeRef.current.fetchVideoList(startDate, endDate);
+    } else {
+      items = await fetchVideoListWs(startDate, endDate);  
     }
+    setItems(items);
   };
-  const fetchVideo = async (name: string) => {
+  const fetchVideo = async (nameToFetch: string) => {
     setVideoData("");
     setVideoName("");
-    try {
-      const url = `${httpServerUrl}/video/${name}`;
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Accept': 'video/mp4,video/*'
-        },
-      });
-      
-      if (response.ok) {
-        try {
-          // Get video data as ArrayBuffer
-          const buffer = await response.arrayBuffer();
-          console.log('Received video data, size:', buffer.byteLength);
-          
-          const bytes = new Uint8Array(buffer);
-          const videoUrl = URL.createObjectURL(new Blob([bytes], { type: 'video/mp4' }));
-          console.log('Created video URL:', videoUrl);
-          setVideoData(videoUrl);
-          setVideoName(name);
-        } catch (error) {
-          console.error('Error converting video:', error);
-        }
-        setTimeout(() => {
-          scrollToVideoPlayer();
-        }, 100)
-        
-      }
-    } catch (error) {
-      console.error('Error fetching video:', error);
-    }
+    const {name, videoUrl} = await fetchVideoWs(nameToFetch);
+    setVideoData(videoUrl);
+    setVideoName(name);
+    setTimeout(() => {
+      scrollToVideoPlayer();
+    }, 100);
   };
-  useFocusEffect(
-    useCallback(() => {
-      fetchVideoList(startDate, endDate);
-    }, [httpServerUrl])
-  );
 
   const renderVideoItem = (item: any, index: number) => (
     <View key={index} style={styles.gridItem}>

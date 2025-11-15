@@ -5,13 +5,14 @@ import { WebSocketSignalingClient } from '@/helpers/signaling';
 import { WebRtcOfferee } from '@/helpers/webRtc';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 
+
 type WebRtcContextType = {
   remoteStream: MediaStream | null;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   handlePlayRef: React.RefObject<Function>;
   handleStopRef: React.RefObject<Function>;
+  offereeRef: React.RefObject<WebRtcOfferee>;
 };
-
 const WebRtcContext = createContext<WebRtcContextType | null>(null);
 
 export const useWebRtc = () => {
@@ -59,7 +60,7 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
         }
         try {
           await signalingClient.connect();
-          //signalingClient.ws?.send(JSON.stringify({"type": "start"}))
+          signalingClient.ws?.send(JSON.stringify({"type": "start"}))
         } catch (err) {
           setIsConnecting(false);
           console.error(err);
@@ -145,6 +146,7 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
       videoRef,
       handlePlayRef,
       handleStopRef,
+      offereeRef,
     }}>
       {children}
     </WebRtcContext.Provider>

@@ -1,3 +1,9 @@
+interface dataChannelMessageTypeToCallbackInterface {
+    [key: string]: Function;
+}
+interface dataChannelTimeoutToIdInterface {
+    [key: string]: number;
+}
 
 export class WebRtcOfferee{
     pc: RTCPeerConnection | null = null;
@@ -38,10 +44,14 @@ export class WebRtcOfferee{
     };
     onIceConnectionChange: (state: string) => void = () => {};
     onTrack: (stream: MediaStream) => void = () => {};
+    dataChannelMessageTypeToCallback: dataChannelMessageTypeToCallbackInterface
+    dataChannelTimeoutToId: dataChannelTimeoutToIdInterface
     constructor(onIceConnectionChange: (state: string) => void, onTrack: (stream: MediaStream) => void) {
         this.pc = null;
         this.onIceConnectionChange = onIceConnectionChange;
         this.onTrack = onTrack;
+        this.dataChannelMessageTypeToCallback = {};
+        this.dataChannelTimeoutToId = {};
     }
     close() {
       if (this.pc?.connectionState !== "closed") {
@@ -50,7 +60,10 @@ export class WebRtcOfferee{
       }
       this.iceCandidatesGenerated = [];
       this.iceCandidateReceivedBuffer = [];
-    }  
+    }
+    isConnected() {
+        return ["connected", "connecting"].includes(this.pc?.connectionState ?? "")
+    }
 
     initializePeerConnection() {
         if (this.pc) {
@@ -96,15 +109,26 @@ export class WebRtcOfferee{
         });
     };
     handleDataChannel() {
-        this.pc?.addEventListener("datachannel", (e) => {
-            this.dataChannel = e.channel;
-            this.dataChannel?.addEventListener("message", (e) => {
+        this.pc?.addEventListener("datachannel", ({channel}) => {
+            this.dataChannel = channel;
+            this.dataChannel.addEventListener("message", (e) => {
                 console.log("message has been received from a Data Channel", e);
+                if (!(e.data instanceof ArrayBuffer)) return;
+                let message;
+                try {
+                    const jsonText = new TextDecoder().decode(e.data);
+                    message = JSON.parse(jsonText);
+                } catch (err) {
+                    return
+                }
+                if (message?.type in this.dataChannelMessageTypeToCallback) {
+                    this.dataChannelMessageTypeToCallback[message.type](message);
+                }
             });
-            this.dataChannel?.addEventListener("close", (e) => {
+            this.dataChannel.addEventListener("close", (e) => {
                 console.log("The close event was fired on you data channel object");
             });
-            this.dataChannel?.addEventListener("open", (e) => {
+            this.dataChannel.addEventListener("open", (e) => {
                 console.log("Data Channel has been opened. You are now ready to send/receive messsages over your Data Channel");
             });
         });
@@ -138,7 +162,7 @@ export class WebRtcOfferee{
                 resolve();
             };
             timeoutId = setTimeout(finish, timeout);
-
+            //TODO: is it regiestered multiple times?
             this.pc.addEventListener("icecandidate", ({candidate}) => {
                 if (!candidate) {
                     finish();
@@ -148,6 +172,43 @@ export class WebRtcOfferee{
                     finish();
                 }
             });
+        });
+    };
+    registerOrSkipDataChannelListener(type: string, callback: Function) {
+        if ("type" in this.dataChannelMessageTypeToCallback) return;
+        this.dataChannelMessageTypeToCallback[type] = callback;
+    };
+    async waitForDataChannel() {
+        return new Promise<void>((resolve, reject) => {
+            if (this.dataChannel) {
+                resolve();
+                return;
+            }
+            const timeoutId = setTimeout(() => {
+                reject(new Error('Data channel creation timeout'));
+            }, 10000);
+            this.pc?.addEventListener("datachannel", (event) => {
+                clearTimeout(timeoutId);
+                this.dataChannel = event.channel;
+                resolve();
+            });
+        });
+    };
+    async fetchVideoList(startDate: string, endDate: string) {
+        try {
+            await this.waitForDataChannel();
+        } catch(err) {
+            console.error(err);
+            return
+        }
+        return new Promise<Array<object>>((resolve, reject) => {
+            if ("videoList" in this.dataChannelTimeoutToId) {
+                clearTimeout(this.dataChannelTimeoutToId["videoList"]);
+            }
+            this.registerOrSkipDataChannelListener("videoList", function (data: any) {
+                resolve(data.videoList);
+            });
+            this.dataChannel?.send(JSON.stringify({type: "videoList", startDate, endDate}));
         });
     };
 }

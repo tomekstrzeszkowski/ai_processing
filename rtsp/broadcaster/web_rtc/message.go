@@ -1,5 +1,7 @@
 package web_rtc
 
+import "strzcam.com/broadcaster/video"
+
 type SignalingMessage struct {
 	Type string                   `json:"type"`
 	Sdp  string                   `json:"sdp,omitempty"`
@@ -8,7 +10,13 @@ type SignalingMessage struct {
 
 type DataChannelMessage struct {
 	Type      string `json:"type"`
-	DateRange string `json:"dateRange,omitempty"`
+	StartDate string `json:"startDate,omitempty"`
+	EndDate   string `json:"endDate,omitempty"`
 	VideoName string `json:"videoName,omitempty"`
 	Seek      int    `json:"seek,omitempty"`
+}
+
+type VideoListMessage struct {
+	Type      string        `json:"type"`
+	VideoList []video.Video `json:"videoList"`
 }

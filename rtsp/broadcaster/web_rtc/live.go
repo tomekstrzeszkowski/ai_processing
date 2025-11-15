@@ -14,14 +14,17 @@ import (
 	"strzcam.com/broadcaster/watcher"
 )
 
-func listen(conn *websocket.Conn, pc *webrtc.PeerConnection) {
+func listen(wsClient *websocket.Conn, videoTrack *VideoTrack, savePath string) {
+	offeror, _ := NewOfferor(wsClient, savePath)
+	defer offeror.Close()
+	offeror.CreatePeerConnection(videoTrack)
+	offeror.CreateAndSendOffer()
 	for {
-		_, message, err := conn.ReadMessage()
+		_, message, err := wsClient.ReadMessage()
 		if err != nil {
 			log.Printf("WebSocket read error: %v", err)
 			return
 		}
-
 		var msg SignalingMessage
 		if err := json.Unmarshal(message, &msg); err != nil {
 			log.Printf("Error unmarshaling message: %v", err)
@@ -30,16 +33,22 @@ func listen(conn *websocket.Conn, pc *webrtc.PeerConnection) {
 
 		switch msg.Type {
 		case "offer":
-			// no need for now
+			log.Printf("Offeree not supported.")
 		case "answer":
+			if offeror.pc == nil {
+				continue
+			}
 			answer := webrtc.SessionDescription{
 				Type: webrtc.SDPTypeAnswer,
 				SDP:  msg.Sdp,
 			}
-			if err := pc.SetRemoteDescription(answer); err != nil {
+			if err := offeror.pc.SetRemoteDescription(answer); err != nil {
 				log.Printf("Error setting remote description: %v", err)
 			}
 		case "ice":
+			if offeror.pc == nil {
+				continue
+			}
 			for _, iceData := range msg.Ice {
 				candidateStr, ok := iceData["candidate"].(string)
 				if !ok {
@@ -59,16 +68,22 @@ func listen(conn *websocket.Conn, pc *webrtc.PeerConnection) {
 					candidate.SDPMLineIndex = &idx
 				}
 
-				if err := pc.AddICECandidate(candidate); err != nil {
+				if err := offeror.pc.AddICECandidate(candidate); err != nil {
 					log.Printf("Error adding ICE candidate: %v", err)
 				}
 			}
+		case "start":
+			log.Printf("Starting...")
+			defer offeror.Close()
+			offeror.CreatePeerConnection(videoTrack)
+			offeror.CreateAndSendOffer()
 		}
 	}
 }
 
 func RunLive(signalingUrl string) {
 	memory, err := watcher.NewSharedMemoryReceiver("video_frame")
+	savePath := fmt.Sprintf("%s_video_frame", watcher.SavePath)
 	if err != nil {
 		panic(fmt.Sprintf("Error creating shared memory receiver: %v", err))
 	}
@@ -86,11 +101,6 @@ func RunLive(signalingUrl string) {
 	}
 	defer videoTrack.Close()
 
-	offeror, _ := NewOfferor(wsClient)
-	defer offeror.Close()
-	pc, err := offeror.CreatePeerConnection(videoTrack)
-
-	go listen(wsClient, pc)
-	offeror.CreateAndSendOffer()
+	go listen(wsClient, videoTrack, savePath)
 	videoTrack.Start(memory)
 }

@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react';
 
-
+// Will be used for app runnin in internal home network
 type HttpContextType = {
 };
 const HttpContext = createContext<HttpContextType | null>(null);

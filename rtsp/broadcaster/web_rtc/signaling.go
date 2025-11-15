@@ -117,7 +117,7 @@ func RunServer(port int) {
 					messageSent = true
 				}
 			}
-			//save message if it's not send
+			//handle not sent message, save it or make other action
 			if !messageSent {
 				switch msg.Type {
 				case "ice":
@@ -129,6 +129,12 @@ func RunServer(port int) {
 				case "failed", "flush":
 					client.ice = []SignalingMessage{}
 					client.offer = nil
+				case "start":
+					for otherUserId, otherClient := range clients {
+						if otherUserId != userId {
+							otherClient.conn.WriteJSON(map[string]string{"type": "start"})
+						}
+					}
 				}
 			}
 			clientsMux.RUnlock()

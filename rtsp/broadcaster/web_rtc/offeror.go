@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v3"
 	"strzcam.com/broadcaster/connection"
+	"strzcam.com/broadcaster/video"
 )
 
 var iceServers = []webrtc.ICEServer{
@@ -39,14 +41,15 @@ var iceServers = []webrtc.ICEServer{
 }
 
 type Offeror struct {
-	pc          *webrtc.PeerConnection
-	dataChannel *webrtc.DataChannel
-	wsClient    *websocket.Conn
-	videoTrack  *VideoTrack
+	pc             *webrtc.PeerConnection
+	dataChannel    *webrtc.DataChannel
+	wsClient       *websocket.Conn
+	videoTrack     *VideoTrack
+	savedVideoPath string
 }
 
-func NewOfferor(wsClient *websocket.Conn) (Offeror, error) {
-	return Offeror{wsClient: wsClient}, nil
+func NewOfferor(wsClient *websocket.Conn, savedVideoPath string) (Offeror, error) {
+	return Offeror{wsClient: wsClient, savedVideoPath: savedVideoPath}, nil
 }
 
 func (o *Offeror) CreatePeerConnection(videoTrack *VideoTrack) (*webrtc.PeerConnection, error) {
@@ -155,6 +158,16 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 			if err := o.wsClient.WriteMessage(websocket.TextMessage, offerData); err != nil {
 				log.Fatal(err)
 			}
+		case "videoList":
+			start, _ := time.Parse("2006-01-02", message.StartDate)
+			end, _ := time.Parse("2006-01-02", message.EndDate)
+			videoList, _ := video.GetVideoByDateRange(o.savedVideoPath, start, end)
+			videoListMessage := VideoListMessage{Type: "videoList", VideoList: videoList}
+			if responseMessage, err := json.Marshal(videoListMessage); err == nil {
+				log.Printf("Sending %s", responseMessage)
+				dataChannel.Send(responseMessage)
+			}
+
 		}
 
 	})
