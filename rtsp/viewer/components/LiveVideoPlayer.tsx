@@ -1,4 +1,6 @@
 import { useWebRtc } from '@/app/webRtcProvider';
+import { Text, View } from 'react-native';
+
 
 interface LiveVideoPlayerProps {
   isConnected: boolean;
@@ -8,7 +10,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({isConnected}) =
   const { videoRef } = useWebRtc();
 
   return (
-    <div style={{
+    <View style={{
       display: "flex", 
       flex: 1,
       flexDirection: "column" ,
@@ -22,7 +24,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({isConnected}) =
           autoPlay 
           playsInline
       />
-      {!isConnected && <div style={{display: "flex", alignSelf: "center"}}>Connect to view stream</div>}
-    </div>
+      {!isConnected && <View style={{display: "flex", alignSelf: "center"}}><Text>Connect to view stream</Text></View>}
+    </View>
   );
 }

@@ -3,13 +3,15 @@ import { VideoPlayer } from '@/components/VideoPlayer';
 import { useProtocol } from '@/app/protocolProvider';
 import { useWebRtc } from '@/app/webRtcProvider';
 import { useWebSocket } from '@/app/websocketProvider';
+import { LiveVideoPlayer } from '@/components/LiveVideoPlayer';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Button,
   Dimensions,
   ScrollView,
   StyleSheet,
-  View
+  Text,
+  View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
@@ -21,7 +23,7 @@ const ITEM_WIDTH = (width - (ITEM_MARGIN * (ITEMS_PER_ROW + 1))) / ITEMS_PER_ROW
 export default () => {
   const { isWebRtc } = useProtocol();
   const { fetchVideoList: fetchVideoListWs, fetchVideo: fetchVideoWs } = useWebSocket();
-  const { handlePlayRef: webrtcHandlePlayRef, handleStopRef: webrtcHandleStopRef, offereeRef }= useWebRtc();
+  const { handlePlayRef: webrtcHandlePlayRef, handleStopRef: webrtcHandleStopRef, offereeRef, setRemoteStream }= useWebRtc();
   const [items, setItems] = useState([]);
   const [videoData, setVideoData] = useState("");
   const [videoName, setVideoName] = useState("");
@@ -84,9 +86,14 @@ export default () => {
   const fetchVideo = async (nameToFetch: string) => {
     setVideoData("");
     setVideoName("");
-    const {name, videoUrl} = await fetchVideoWs(nameToFetch);
-    setVideoData(videoUrl);
-    setVideoName(name);
+    if (isWebRtc) {
+      const event = await offereeRef.current.fetchVideo(nameToFetch);
+      if (event) setRemoteStream(event.streams[0] || new MediaStream([event.track]));
+    } else {
+      const {name, videoUrl} = await fetchVideoWs(nameToFetch);
+      setVideoData(videoUrl);
+      setVideoName(name);
+    }
     setTimeout(() => {
       scrollToVideoPlayer();
     }, 100);
@@ -111,7 +118,7 @@ export default () => {
           ref={scrollViewRef}
           contentContainerStyle={styles.scrollContent}>
           <View>
-            <div style={{ 
+            <View style={{ 
               display: 'flex', 
               padding: 20, 
               alignItems: 'center', 
@@ -129,13 +136,14 @@ export default () => {
                 onChange={(e) => onChangeDateRange(startDate, e.target.value)}
                 min={startDate}
               />
-            </div>
+            </View>
           </View>
           <View style={styles.gridContainer}>
             {items.map((item, index) => renderVideoItem(item, index))}
           </View>
           <View ref={videoPlayerRef}>
-            {videoData ? <VideoPlayer videoUrl={videoData} name={videoName} scrollView={scrollViewRef} /> : <div>No video selected</div>}
+            {videoData ? <VideoPlayer videoUrl={videoData} name={videoName} scrollView={scrollViewRef} /> : <View><Text>No video selected</Text></View>}
+            {isWebRtc && <LiveVideoPlayer isConnected={true} />}
           </View>
         </ScrollView>
       </SafeAreaView>

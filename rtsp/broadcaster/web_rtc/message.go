@@ -14,6 +14,7 @@ type DataChannelMessage struct {
 	EndDate   string `json:"endDate,omitempty"`
 	VideoName string `json:"videoName,omitempty"`
 	Seek      int    `json:"seek,omitempty"`
+	Sdp       string `json:"sdp,omitempty"`
 }
 
 type VideoListMessage struct {

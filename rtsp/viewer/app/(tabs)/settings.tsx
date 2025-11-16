@@ -2,6 +2,10 @@
 import { useProtocol } from '@/app/protocolProvider';
 import { Picker } from '@react-native-picker/picker';
 import React from 'react';
+import {
+  Text,
+  View
+} from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 
@@ -11,8 +15,8 @@ export default () => {
   return (
     <SafeAreaProvider style={{backgroundColor: "#1a1a1a", color: "#b9b9b9ff"}}>
       <SafeAreaView>
-        <div style={{ display: 'flex', padding: 20, alignItems: 'center' }}>
-          <div>Protocol: </div>
+        <View style={{ display: 'flex', padding: 20, alignItems: 'center' }}>
+          <View><Text style={{color: "#b9b9b9ff"}}>Protocol: </Text></View>
           <Picker
             selectedValue={protocol}
             onValueChange={(itemValue, itemIndex) =>
@@ -22,7 +26,7 @@ export default () => {
             <Picker.Item label="P2P" value="P2P_PROTOCOL" />
             <Picker.Item label="HTTP: TODO" value="HTTP_PROTOCOL" />
           </Picker>
-        </div>
+        </View>
       </SafeAreaView>
     </SafeAreaProvider>
   );

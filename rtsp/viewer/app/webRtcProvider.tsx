@@ -4,10 +4,12 @@ import { SignalingMessage } from '@/helpers/message';
 import { WebSocketSignalingClient } from '@/helpers/signaling';
 import { WebRtcOfferee } from '@/helpers/webRtc';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 
 
 type WebRtcContextType = {
   remoteStream: MediaStream | null;
+  setRemoteStream: Function,
   videoRef: React.RefObject<HTMLVideoElement | null>;
   handlePlayRef: React.RefObject<Function>;
   handleStopRef: React.RefObject<Function>;
@@ -33,7 +35,7 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
     isWebRtc,
   } = useProtocol();
   const { showAlert } = useToast();
-  const host = document.location.hostname || 'localhost';
+  const host = Platform.OS === 'web' ? (document.location.hostname || 'localhost') : "localhost";
   const signalingServerUrl = `ws://${host}:7070/ws`;
   const signalingClient = new WebSocketSignalingClient(11, signalingServerUrl);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -143,6 +145,7 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
   return (
     <WebRtcContext.Provider value={{
       remoteStream,
+      setRemoteStream,
       videoRef,
       handlePlayRef,
       handleStopRef,

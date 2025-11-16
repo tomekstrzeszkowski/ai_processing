@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import {
   Button,
   ScrollView,
-  StyleSheet
+  StyleSheet,
+  View,
 } from 'react-native';
 
 interface VideoPlayerProps {
@@ -15,11 +16,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, name, scroll
   const [error, setError] = useState<string>("");
 
   if (!videoUrl) {
-    return <div>No video selected</div>;
+    return <View>No video selected</View>;
   }
 
   return (
-    <div style={styles.container}>
+    <View style={styles.container}>
       <Button 
         title={`${name} ⬆️`}
         color="#4CAF50"
@@ -32,7 +33,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, name, scroll
       />
 
       {error ? (
-        <div>{error}</div>
+        <View>{error}</View>
       ) : (
         <video 
           src={videoUrl} 
@@ -45,7 +46,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, name, scroll
           }}
         />
       )}
-    </div>
+    </View>
   );
 };
 

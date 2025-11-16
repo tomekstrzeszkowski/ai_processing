@@ -104,6 +104,7 @@ export class WebRtcOfferee{
             }
         });
         this.pc?.addEventListener("track", (event) => {
+          console.log("Added video track!")
           const stream = event.streams[0] || new MediaStream([event.track]);
           this.onTrack(stream);
         });
@@ -199,7 +200,7 @@ export class WebRtcOfferee{
             await this.waitForDataChannel();
         } catch(err) {
             console.error(err);
-            return
+            return [];
         }
         return new Promise<Array<object>>((resolve, reject) => {
             if ("videoList" in this.dataChannelTimeoutToId) {
@@ -209,6 +210,36 @@ export class WebRtcOfferee{
                 resolve(data.videoList);
             });
             this.dataChannel?.send(JSON.stringify({type: "videoList", startDate, endDate}));
+        });
+    };
+    async fetchVideo(videoName: string) {
+        try {
+            await this.waitForDataChannel();
+        } catch(err) {
+            console.error(err);
+            return
+        }
+        const dataChannel = this.dataChannel;
+        const pc = this.pc;
+        this.registerOrSkipDataChannelListener("offer", async function (offer: any) {
+            console.log("got new offer");
+            if (!pc || !dataChannel) {
+                throw new Error(`Can not re-negotiate, pc or data channel is empty ${pc} ${dataChannel}`)
+            }
+            await pc.setRemoteDescription(offer);
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            dataChannel.send(JSON.stringify(answer));
+        });
+        this.dataChannel?.send(JSON.stringify({type: "video", videoName}));
+        return new Promise<RTCTrackEvent>((resolve, reject) => {
+            this.pc?.addEventListener("track", (event) => {
+                console.log("Added video track", event.streams, event)
+            //   const stream = event.streams[0] || new MediaStream([event.track]);
+            //   this.onTrack(stream);
+                resolve(event);
+            });
+
         });
     };
 }

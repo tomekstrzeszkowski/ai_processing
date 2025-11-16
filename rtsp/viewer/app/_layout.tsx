@@ -11,6 +11,10 @@ import { ProtocolProvider } from '@/app/protocolProvider';
 import { ToastProvider } from '@/app/toastProvider';
 import { WebRtcProvider } from '@/app/webRtcProvider';
 import { WebSocketProvider } from '@/app/websocketProvider';
+import {
+  Text,
+  View
+} from 'react-native';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -20,7 +24,7 @@ export default function RootLayout() {
 
   if (!loaded) {
     return (
-      <div>Still Loading...</div>
+      <View><Text>Still Loading...</Text></View>
     );
   }
 

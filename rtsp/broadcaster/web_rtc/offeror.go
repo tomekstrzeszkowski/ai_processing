@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"path/filepath"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -94,7 +95,7 @@ func (o *Offeror) HandlePeerConnection() {
 	o.pc.OnNegotiationNeeded(func() {
 		state := o.pc.ConnectionState()
 		switch state {
-		case webrtc.PeerConnectionStateNew:
+		case webrtc.PeerConnectionStateNew, webrtc.PeerConnectionStateConnected, webrtc.PeerConnectionStateConnecting:
 			return
 		}
 		fmt.Printf("Negotiation needed, create and send a new offer connection state: %s", state)
@@ -167,7 +168,43 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 				log.Printf("Sending %s", responseMessage)
 				dataChannel.Send(responseMessage)
 			}
-
+		case "video":
+			// when adding video re-negotation is needed, exchange offer via dataChannel
+			fmt.Printf("Adding video track %s", message.VideoName)
+			filePath := filepath.Join(o.savedVideoPath, message.VideoName)
+			staticVideoTrack, err := NewStaticVideoTrack()
+			if err := staticVideoTrack.LoadVideo(filePath); err != nil {
+				log.Fatal(err)
+				return
+			}
+			// videoBytes, _ := video.GetVideoByPath(filePath)
+			rtpSender, err := o.pc.AddTrack(staticVideoTrack.track)
+			staticVideoTrack.Play()
+			if err != nil {
+				log.Fatal(err)
+				return
+			}
+			go func() {
+				rtcpBuf := make([]byte, 1500)
+				for {
+					if _, _, err := rtpSender.Read(rtcpBuf); err != nil {
+						return
+					}
+				}
+			}()
+			offer, err := o.PrepareOffer()
+			if err != nil {
+				return
+			}
+			dataChannel.Send(offer)
+		case "answer":
+			answer := webrtc.SessionDescription{
+				Type: webrtc.SDPTypeAnswer,
+				SDP:  message.Sdp,
+			}
+			if err := o.pc.SetRemoteDescription(answer); err != nil {
+				log.Printf("Error setting remote description: %v", err)
+			}
 		}
 
 	})
@@ -191,8 +228,7 @@ func (o *Offeror) HandleVideoTrack() error {
 	}()
 	return nil
 }
-
-func (o *Offeror) CreateAndSendOffer() {
+func (o *Offeror) PrepareOffer() ([]byte, error) {
 	offer, err := o.pc.CreateOffer(nil)
 	if err != nil {
 		log.Fatal(err)
@@ -204,6 +240,15 @@ func (o *Offeror) CreateAndSendOffer() {
 	offerData, err := json.Marshal(offer)
 	if err != nil {
 		log.Fatal(err)
+		return nil, err
+	}
+	return offerData, nil
+}
+func (o *Offeror) CreateAndSendOffer() {
+	offerData, err := o.PrepareOffer()
+	if err != nil {
+		log.Fatal(err)
+		return
 	}
 
 	if err := o.wsClient.WriteMessage(websocket.TextMessage, offerData); err != nil {

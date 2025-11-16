@@ -37,7 +37,7 @@ export const WebSocketProvider = ({ children }: { children: React.ReactNode }) =
   const { showAlert } = useToast();
   const lastUpdateRef = useRef(0);
   const MIN_FRAME_INTERVAL = 33; // ~30fps max (adjust as needed)
-  const host = document.location.hostname || 'localhost';
+  const host = Platform.OS === 'web' ? (document.location.hostname || 'localhost') : "localhost";
   const [serverUrl, ] = useState(`ws://${host}:7080/ws`);
   const [httpServerUrl, ] = useState(`http://${host}:7080`);
   const [imageUri, setImageUri] = useState<string | null>(null);
