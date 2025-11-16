@@ -98,8 +98,8 @@ func (r *frameReader) Read() (image.Image, func(), error) {
 func NewVideoTrack() (*VideoTrack, error) {
 	track, err := webrtc.NewTrackLocalStaticSample(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8},
-		"video",
-		"pion",
+		"live",
+		"video_frame_live",
 	)
 	if err != nil {
 		log.Fatal(err)

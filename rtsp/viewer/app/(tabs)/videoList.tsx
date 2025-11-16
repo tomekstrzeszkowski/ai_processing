@@ -29,6 +29,7 @@ export default () => {
   const [videoName, setVideoName] = useState("");
   const videoPlayerRef = useRef<View>(null);
   const scrollViewRef = useRef<ScrollView>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
 
   // Cleanup MediaSource and blob URLs when component unmounts or video changes
   useEffect(() => {
@@ -87,8 +88,8 @@ export default () => {
     setVideoData("");
     setVideoName("");
     if (isWebRtc) {
-      const event = await offereeRef.current.fetchVideo(nameToFetch);
-      if (event) setRemoteStream(event.streams[0] || new MediaStream([event.track]));
+      const stream = await offereeRef.current.fetchVideo(nameToFetch);
+      if (stream) setStream(stream);
     } else {
       const {name, videoUrl} = await fetchVideoWs(nameToFetch);
       setVideoData(videoUrl);
@@ -143,7 +144,7 @@ export default () => {
           </View>
           <View ref={videoPlayerRef}>
             {videoData ? <VideoPlayer videoUrl={videoData} name={videoName} scrollView={scrollViewRef} /> : <View><Text>No video selected</Text></View>}
-            {isWebRtc && <LiveVideoPlayer isConnected={true} />}
+            {isWebRtc && <LiveVideoPlayer stream={stream} isConnected={true} />}
           </View>
         </ScrollView>
       </SafeAreaView>

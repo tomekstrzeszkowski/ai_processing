@@ -42,11 +42,12 @@ var iceServers = []webrtc.ICEServer{
 }
 
 type Offeror struct {
-	pc             *webrtc.PeerConnection
-	dataChannel    *webrtc.DataChannel
-	wsClient       *websocket.Conn
-	videoTrack     *VideoTrack
-	savedVideoPath string
+	pc               *webrtc.PeerConnection
+	dataChannel      *webrtc.DataChannel
+	wsClient         *websocket.Conn
+	videoTrack       *VideoTrack
+	staticVideoTrack *StaticVideoTrack
+	savedVideoPath   string
 }
 
 func NewOfferor(wsClient *websocket.Conn, savedVideoPath string) (Offeror, error) {
@@ -172,31 +173,40 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 			// when adding video re-negotation is needed, exchange offer via dataChannel
 			fmt.Printf("Adding video track %s", message.VideoName)
 			filePath := filepath.Join(o.savedVideoPath, message.VideoName)
-			staticVideoTrack, err := NewStaticVideoTrack()
-			if err := staticVideoTrack.LoadVideo(filePath); err != nil {
-				log.Fatal(err)
-				return
-			}
-			// videoBytes, _ := video.GetVideoByPath(filePath)
-			rtpSender, err := o.pc.AddTrack(staticVideoTrack.track)
-			staticVideoTrack.Play()
-			if err != nil {
-				log.Fatal(err)
-				return
-			}
-			go func() {
-				rtcpBuf := make([]byte, 1500)
-				for {
-					if _, _, err := rtpSender.Read(rtcpBuf); err != nil {
-						return
-					}
+			if o.staticVideoTrack == nil {
+				staticVideoTrack, err := NewStaticVideoTrack()
+				o.staticVideoTrack = staticVideoTrack
+				if err := staticVideoTrack.LoadVideo(filePath); err != nil {
+					log.Fatal(err)
+					return
 				}
-			}()
-			offer, err := o.PrepareOffer()
-			if err != nil {
-				return
+				// videoBytes, _ := video.GetVideoByPath(filePath)
+				rtpSender, err := o.pc.AddTrack(staticVideoTrack.track)
+				staticVideoTrack.Play()
+				if err != nil {
+					log.Fatal(err)
+					return
+				}
+				go func() {
+					rtcpBuf := make([]byte, 1500)
+					for {
+						if _, _, err := rtpSender.Read(rtcpBuf); err != nil {
+							return
+						}
+					}
+				}()
+				if err != nil {
+					log.Fatal(err)
+					return
+				}
+				offer, err := o.PrepareOffer()
+				if err != nil {
+					return
+				}
+				dataChannel.Send(offer)
+			} else {
+				o.staticVideoTrack.LoadVideo(filePath)
 			}
-			dataChannel.Send(offer)
 		case "answer":
 			answer := webrtc.SessionDescription{
 				Type: webrtc.SDPTypeAnswer,

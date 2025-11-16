@@ -45,8 +45,6 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
   const offereeRef = useRef<WebRtcOfferee>(new WebRtcOfferee((state) => {
     setIsConnecting(false);
     setIsConnected(state === "connected");
-  }, (stream) => {
-    setRemoteStream(stream);
   }));
 
   useEffect(() => {
@@ -55,7 +53,7 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
     videoRef.current?.addEventListener("play", handlePlay);
     videoRef.current?.addEventListener("pause", handlePause);
 
-    handlePlayRef.current = async () => {
+    handlePlayRef.current = async (setStreamTrack: Function | null) => {
         const offeree = offereeRef.current;
         if (!isWebRtc || ["connected", "connecting"].includes(offeree.pc?.connectionState ?? "")) {
             return;
@@ -70,6 +68,9 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
           return;
         }
         offeree.initializePeerConnection();
+        if (setStreamTrack) {
+          offeree.onTrack(setStreamTrack);
+        }
         signalingClient.onIce(async candidates => {
           try{
             await offeree.handleIceCandidates({ice: candidates.ice as RTCIceCandidate[]});
@@ -82,6 +83,9 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
           if (offeree.pc?.connectionState === "closed" || offeree.pc?.signalingState === "closed") {
             //can be closed by other peer
             offeree.initializePeerConnection();
+            if (setStreamTrack) {
+              offeree.onTrack(setStreamTrack);
+            }
             return;
           } else if (offeree.pc?.connectionState === "connected") {
             return;

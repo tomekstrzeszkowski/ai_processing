@@ -52,7 +52,7 @@ class Drawer:
 
     def rectangle(self, type_verbose, x0, y0, w, h):
         self.rectagle_count += 1
-        draw_rounded_rectangle(self.frame, (x0, y0), (x0 + w, y0 + h), (0, 255, 0), 2, radius=5)
+        draw_rounded_rectangle(self.frame, (x0, y0), (x0 + w, y0 + h), (0, 255, 0), 2, radius=10)
         for bold, color in ((5, (0, 0, 0)), (3, (255, 255, 255))):
             cv2.putText(
                 self.frame,

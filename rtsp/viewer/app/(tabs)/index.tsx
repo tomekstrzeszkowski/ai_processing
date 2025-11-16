@@ -3,7 +3,8 @@ import { useWebRtc } from '@/app/webRtcProvider';
 import { useWebSocket } from '@/app/websocketProvider';
 import { CachedVideoPlayer } from '@/components/CachedVideoPlayer';
 import { LiveVideoPlayer } from '@/components/LiveVideoPlayer';
-import React, { useEffect } from 'react';
+import { useIsFocused } from '@react-navigation/native';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
@@ -14,6 +15,7 @@ import {
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 const App = () => {
+  const isFocused = useIsFocused();
   const { 
     isConnected, 
     isConnecting, 
@@ -22,13 +24,26 @@ const App = () => {
     isWebRtc,
   } = useProtocol();
   const { handlePlayRef: wsHandlePlayRef, handleStopRef: wsHandleStopRef } = useWebSocket();
-  const { handlePlayRef: webrtcHandlePlayRef, handleStopRef: webrtcHandleStopRef } = useWebRtc();
+  const { handlePlayRef: webrtcHandlePlayRef, handleStopRef: webrtcHandleStopRef, offereeRef } = useWebRtc();
+  const [stream, setStream] = useState<MediaStream | null>(null);
 
+  useEffect(() => {
+    if (!isFocused || !(isWebRtc && isConnected)) return;
+    const firstKey = [...offereeRef.current.streamIdToStream.keys()]?.[0];
+    if (firstKey) {
+      const mainStream = offereeRef.current.streamIdToStream.get(firstKey);
+      if (mainStream) {
+        setStream(mainStream);
+      }
+    }
+  }, [isFocused]);
   const connect = () => {
     if (isConnecting || isConnected) return;
     setIsConnecting(true);
     if (isWebRtc) {
-      webrtcHandlePlayRef.current();
+      webrtcHandlePlayRef.current((stream: MediaStream) => {
+        setStream(stream);
+      });
     } else {
       wsHandlePlayRef.current();
     }
@@ -48,10 +63,15 @@ const App = () => {
     };
   }, []);
 
+  // useEffect(() => {
+  //   console.log("STREAM", remoteStream)
+  //   setStream(remoteStream)
+  // }, [remoteStream])
+
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
-        {isWebRtc && <LiveVideoPlayer isConnected={isConnected} />}
+        {isWebRtc && <LiveVideoPlayer stream={stream} isConnected={isConnected} />}
         {!isWebRtc && <CachedVideoPlayer isConnected={isConnected} styles={styles} />}
 
         <View style={styles.connectionContainer}>

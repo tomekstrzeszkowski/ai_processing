@@ -1,15 +1,16 @@
 interface dataChannelMessageTypeToCallbackInterface {
-    [key: string]: Function;
+    [key: string]: Function
 }
 interface dataChannelTimeoutToIdInterface {
-    [key: string]: number;
+    [key: string]: number
 }
 
+
 export class WebRtcOfferee{
-    pc: RTCPeerConnection | null = null;
-    dataChannel: RTCDataChannel | undefined;
-    iceCandidatesGenerated: RTCIceCandidate[] = [];
-    iceCandidateReceivedBuffer: RTCIceCandidate[] = [];
+    pc: RTCPeerConnection | null = null
+    dataChannel: RTCDataChannel | undefined
+    iceCandidatesGenerated: RTCIceCandidate[] = []
+    iceCandidateReceivedBuffer: RTCIceCandidate[] = []
     configuration: RTCConfiguration = {
         iceServers: [
             // STUN servers
@@ -41,17 +42,17 @@ export class WebRtcOfferee{
                 credential: 'openrelayproject'
             }
         ]
-    };
-    onIceConnectionChange: (state: string) => void = () => {};
-    onTrack: (stream: MediaStream) => void = () => {};
+    }
+    onIceConnectionChange: (state: string) => void = () => {}
     dataChannelMessageTypeToCallback: dataChannelMessageTypeToCallbackInterface
     dataChannelTimeoutToId: dataChannelTimeoutToIdInterface
-    constructor(onIceConnectionChange: (state: string) => void, onTrack: (stream: MediaStream) => void) {
+    streamIdToStream: Map<string, MediaStream>
+    constructor(onIceConnectionChange: (state: string) => void) {
         this.pc = null;
         this.onIceConnectionChange = onIceConnectionChange;
-        this.onTrack = onTrack;
         this.dataChannelMessageTypeToCallback = {};
         this.dataChannelTimeoutToId = {};
+        this.streamIdToStream = new Map();
     }
     close() {
       if (this.pc?.connectionState !== "closed") {
@@ -71,6 +72,10 @@ export class WebRtcOfferee{
         }
         this.pc = null;
         this.pc = new RTCPeerConnection(this.configuration);
+        this.pc.addEventListener("track", (event: RTCTrackEvent) => {
+            const stream = event.streams[0] || new MediaStream([event.track]);
+            this.streamIdToStream.set(stream.id, stream);
+        });
         this.handlePC();
         this.handleDataChannel()
     }
@@ -103,11 +108,18 @@ export class WebRtcOfferee{
                 this.pc.restartIce();
             }
         });
-        this.pc?.addEventListener("track", (event) => {
-          console.log("Added video track!")
-          const stream = event.streams[0] || new MediaStream([event.track]);
-          this.onTrack(stream);
-        });
+    };
+    onTrack(callback: Function) {
+        const pc = this.pc;
+        const streamIdToStream = this.streamIdToStream;
+        function streamTrack(event: RTCTrackEvent) {
+            console.log("Added video stream track!", event.streams, event);
+            pc?.removeEventListener("track", streamTrack)
+            const stream = event.streams[0] || new MediaStream([event.track]);
+            streamIdToStream.set(stream.id, stream);
+            callback(stream);
+        }
+        this.pc?.addEventListener("track", streamTrack);
     };
     handleDataChannel() {
         this.pc?.addEventListener("datachannel", ({channel}) => {
@@ -221,6 +233,8 @@ export class WebRtcOfferee{
         }
         const dataChannel = this.dataChannel;
         const pc = this.pc;
+        this.pc?.addEventListener("track", (e) => {
+        });
         this.registerOrSkipDataChannelListener("offer", async function (offer: any) {
             console.log("got new offer");
             if (!pc || !dataChannel) {
@@ -232,14 +246,16 @@ export class WebRtcOfferee{
             dataChannel.send(JSON.stringify(answer));
         });
         this.dataChannel?.send(JSON.stringify({type: "video", videoName}));
-        return new Promise<RTCTrackEvent>((resolve, reject) => {
-            this.pc?.addEventListener("track", (event) => {
+        const streamIdToStream = this.streamIdToStream;
+        return new Promise<MediaStream>((resolve, reject) => {
+            function handleTrack(event: RTCTrackEvent) {
                 console.log("Added video track", event.streams, event)
-            //   const stream = event.streams[0] || new MediaStream([event.track]);
-            //   this.onTrack(stream);
-                resolve(event);
-            });
-
+                pc?.removeEventListener("track", handleTrack);
+                const stream = event.streams[0] || new MediaStream([event.track]);
+                streamIdToStream.set(stream.id, stream);
+                resolve(stream);
+            }
+            this.pc?.addEventListener("track", handleTrack);
         });
     };
 }

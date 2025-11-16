@@ -30,8 +30,8 @@ func NewStaticVideoTrack() (*StaticVideoTrack, error) {
 	// H.264 track
 	track, err := webrtc.NewTrackLocalStaticSample(
 		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264},
-		"video",
-		"pion-video",
+		"static_file",
+		"video_frame_static_file",
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create video track: %w", err)

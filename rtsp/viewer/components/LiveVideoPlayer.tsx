@@ -1,13 +1,18 @@
-import { useWebRtc } from '@/app/webRtcProvider';
+import { useEffect, useRef } from 'react';
 import { Text, View } from 'react-native';
 
 
 interface LiveVideoPlayerProps {
   isConnected: boolean;
+  stream: MediaStream | null,
 }
 
-export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({isConnected}) => {
-  const { videoRef } = useWebRtc();
+export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({isConnected, stream}) => {
+    const videoRef = useRef<HTMLVideoElement>(null);
+    useEffect(() => {
+      if (stream && videoRef.current)
+      videoRef.current.srcObject = stream;
+    }, [stream]);
 
   return (
     <View style={{
