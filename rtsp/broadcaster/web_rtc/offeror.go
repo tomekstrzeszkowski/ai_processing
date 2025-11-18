@@ -51,7 +51,7 @@ type Offeror struct {
 }
 
 func NewOfferor(wsClient *websocket.Conn, savedVideoPath string) (Offeror, error) {
-	return Offeror{wsClient: wsClient, savedVideoPath: savedVideoPath}, nil
+	return Offeror{wsClient: wsClient, savedVideoPath: savedVideoPath, staticVideoTrack: nil}, nil
 }
 
 func (o *Offeror) CreatePeerConnection(videoTrack *VideoTrack) (*webrtc.PeerConnection, error) {
@@ -71,6 +71,7 @@ func (o *Offeror) CreatePeerConnection(videoTrack *VideoTrack) (*webrtc.PeerConn
 }
 
 func (o *Offeror) Close() {
+	o.staticVideoTrack = nil
 	o.pc.Close()
 }
 
@@ -87,6 +88,7 @@ func (o *Offeror) HandlePeerConnection() {
 		fmt.Printf("Connection state: %s\n", state.String())
 		switch state {
 		case webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateDisconnected:
+			o.staticVideoTrack = nil
 			connectionState, _ := json.Marshal(map[string]string{"type": "failed"})
 			if err := o.wsClient.WriteMessage(websocket.TextMessage, connectionState); err != nil {
 				log.Fatal(err)
@@ -205,6 +207,7 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 				}
 				dataChannel.Send(offer)
 			} else {
+				fmt.Printf("load video %s", filePath)
 				o.staticVideoTrack.LoadVideo(filePath)
 			}
 		case "answer":

@@ -29,7 +29,9 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({isConnected, st
           autoPlay 
           playsInline
       />
-      {!isConnected && <View style={{display: "flex", alignSelf: "center"}}><Text>Connect to view stream</Text></View>}
+      {!isConnected && <View style={{display: "flex", alignSelf: "center"}}>
+        <Text style={{ color: "#b9b9b9ff" }}>Connect to view stream</Text>
+      </View>}
     </View>
   );
 }

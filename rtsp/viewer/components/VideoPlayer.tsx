@@ -3,6 +3,7 @@ import {
   Button,
   ScrollView,
   StyleSheet,
+  Text,
   View,
 } from 'react-native';
 
@@ -31,10 +32,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, name, scroll
         });
         }}
       />
-
-      {error ? (
-        <View>{error}</View>
-      ) : (
+      {error && (
+        <View><Text>{error}</Text></View>
+      )}
+      (
+        {videoUrl ? (
         <video 
           src={videoUrl} 
           controls 
@@ -45,7 +47,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, name, scroll
             setError('Error playing video');
           }}
         />
-      )}
+        ): (
+          <View style={{alignItems: "center"}}>
+            <Text style={{ color: "#b9b9b9ff" }}>No video selected</Text>
+          </View>
+        )
+        }
+
+      )
     </View>
   );
 };

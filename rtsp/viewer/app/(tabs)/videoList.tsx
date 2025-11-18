@@ -4,14 +4,14 @@ import { useProtocol } from '@/app/protocolProvider';
 import { useWebRtc } from '@/app/webRtcProvider';
 import { useWebSocket } from '@/app/websocketProvider';
 import { LiveVideoPlayer } from '@/components/LiveVideoPlayer';
+import { useIsFocused } from '@react-navigation/native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Button,
   Dimensions,
   ScrollView,
   StyleSheet,
-  Text,
-  View,
+  View
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
@@ -21,7 +21,8 @@ const ITEMS_PER_ROW = 6;
 const ITEM_WIDTH = (width - (ITEM_MARGIN * (ITEMS_PER_ROW + 1))) / ITEMS_PER_ROW;
 
 export default () => {
-  const { isWebRtc } = useProtocol();
+  const isFocused = useIsFocused();
+  const { isWebRtc, isConnected } = useProtocol();
   const { fetchVideoList: fetchVideoListWs, fetchVideo: fetchVideoWs } = useWebSocket();
   const { handlePlayRef: webrtcHandlePlayRef, handleStopRef: webrtcHandleStopRef, offereeRef, setRemoteStream }= useWebRtc();
   const [items, setItems] = useState([]);
@@ -30,6 +31,12 @@ export default () => {
   const videoPlayerRef = useRef<View>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [startDate, setStartDate] = useState(() => {
+    const before = new Date();
+    before.setDate(before.getDate() - 7);
+    return before.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
 
   // Cleanup MediaSource and blob URLs when component unmounts or video changes
   useEffect(() => {
@@ -47,13 +54,13 @@ export default () => {
       }
     };
   }, [videoData]);
+  useEffect(() => {
+    if (!isFocused || !(isWebRtc)) return;
+    if (items.length === 0) {
+      fetchVideoList(startDate, endDate);
+    }
+  }, [isFocused]);
 
-  const [startDate, setStartDate] = useState(() => {
-    const before = new Date();
-    before.setDate(before.getDate() - 7);
-    return before.toISOString().split('T')[0];
-  });
-  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const scrollToVideoPlayer = () => {
     if (scrollViewRef.current) {
       videoPlayerRef.current?.measureInWindow((x, y) => {
@@ -68,7 +75,6 @@ export default () => {
   const onChangeDateRange = (startDate: string, endDate: string) => {
     setStartDate(startDate);
     setEndDate(endDate);
-
     fetchVideoList(startDate, endDate);
   }
   const fetchVideoList = async (startDate: string, endDate: string) => {
@@ -124,18 +130,21 @@ export default () => {
               padding: 20, 
               alignItems: 'center', 
               alignSelf: 'center',
-              gap: 20
+              gap: 10,
+              flexDirection: "column",
             }}>
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => onChangeDateRange(e.target.value, endDate)}
+                style={{ display: "block" }}
               />
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => onChangeDateRange(startDate, e.target.value)}
                 min={startDate}
+                style={{ display: "block" }}
               />
             </View>
           </View>
@@ -143,8 +152,8 @@ export default () => {
             {items.map((item, index) => renderVideoItem(item, index))}
           </View>
           <View ref={videoPlayerRef}>
-            {videoData ? <VideoPlayer videoUrl={videoData} name={videoName} scrollView={scrollViewRef} /> : <View><Text>No video selected</Text></View>}
-            {isWebRtc && <LiveVideoPlayer stream={stream} isConnected={true} />}
+            {!isWebRtc && <VideoPlayer videoUrl={videoData} name={videoName} scrollView={scrollViewRef} />}
+            {isWebRtc && <LiveVideoPlayer stream={stream} isConnected={isConnected} />}
           </View>
         </ScrollView>
       </SafeAreaView>
