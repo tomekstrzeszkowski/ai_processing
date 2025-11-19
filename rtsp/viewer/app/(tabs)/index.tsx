@@ -1,7 +1,6 @@
 import { useProtocol } from '@/app/protocolProvider';
 import { useWebRtc } from '@/app/webRtcProvider';
 import { useWebSocket } from '@/app/websocketProvider';
-import { CachedVideoPlayer } from '@/components/CachedVideoPlayer';
 import { LiveVideoPlayer } from '@/components/LiveVideoPlayer';
 import { useIsFocused } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
@@ -72,7 +71,7 @@ const App = () => {
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
         {isWebRtc && <LiveVideoPlayer stream={stream} isConnected={isConnected} />}
-        {!isWebRtc && <CachedVideoPlayer isConnected={isConnected} styles={styles} />}
+        {!isWebRtc && <LiveVideoPlayer streamUrl='http://localhost:7071/stream' isConnected={true} />}
 
         <View style={styles.connectionContainer}>
           <TouchableOpacity

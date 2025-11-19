@@ -63,7 +63,7 @@ func main() {
 				frameCount := len(frames)
 				if frameCount > 0 {
 					log.Printf("Broadcasting frames: %d\n", frameCount)
-					server.BroadcastFramesAdaptative(frames)
+					server.BroadcastFrame(frames)
 				}
 			}
 		}

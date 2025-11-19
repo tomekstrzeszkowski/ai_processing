@@ -12,7 +12,7 @@ func main() {
 	server.PrepareEndpoints()
 	go func() {
 		for frame := range memory.Frames {
-			server.BroadcastFrame(frame)
+			server.BroadcastFrame([][]byte{frame})
 		}
 	}()
 	server.Start()
