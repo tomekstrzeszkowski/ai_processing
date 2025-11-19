@@ -2,6 +2,7 @@ package watcher
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -13,72 +14,82 @@ type HLSConverter struct {
 	segmentDir    string
 	playlistPath  string
 	ffmpegCmd     *exec.Cmd
-	frameWriter   *os.File
+	frameWriter   io.WriteCloser
 	mu            sync.Mutex
 	segmentNumber int
 	Frames        chan [][]byte
 }
 
 func NewHLSConverter(outputDir string, frames chan [][]byte) (*HLSConverter, error) {
-	segmentDir := filepath.Join(outputDir, "segments")
-	if err := os.MkdirAll(segmentDir, 0755); err != nil {
-		return nil, err
-	}
-
 	return &HLSConverter{
-		segmentDir:   segmentDir,
+		segmentDir:   outputDir,
 		playlistPath: filepath.Join(outputDir, "stream.m3u8"),
 		Frames:       frames,
 	}, nil
 }
 
 func (h *HLSConverter) Start() error {
-	// Create a named pipe for JPEG frames
-	pipePath := filepath.Join(h.segmentDir, "frames.mjpeg")
-
 	// Use FFmpeg to convert MJPEG to HLS
 	h.ffmpegCmd = exec.Command("ffmpeg",
 		"-f", "mjpeg",
-		"-i", "pipe:0", // Read from stdin
+		"-re",
+		"-i", "pipe:0",
+		"-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
 		"-c:v", "libx264",
 		"-preset", "ultrafast",
 		"-tune", "zerolatency",
-		"-g", "60", // Keyframe interval
+		"-g", "30", // Keyframe every 30 frames (more frequent)
 		"-sc_threshold", "0",
 		"-f", "hls",
-		"-hls_time", "2", // 2 second segments
-		"-hls_list_size", "5", // Keep 5 segments
-		"-hls_flags", "delete_segments+append_list",
+		"-hls_time", "2",
+		"-hls_list_size", "6", // Keep 6 segments (~12 seconds)
+		"-hls_flags", "delete_segments+omit_endlist+independent_segments",
+		"-hls_segment_type", "mpegts",
+		"-hls_allow_cache", "0", // Disable caching
 		"-hls_segment_filename", filepath.Join(h.segmentDir, "segment_%03d.ts"),
 		h.playlistPath,
 	)
+
+	// Capture FFmpeg's stderr for debugging
+	h.ffmpegCmd.Stderr = os.Stderr
+	h.ffmpegCmd.Stdout = os.Stdout
+
+	stdinPipe, err := h.ffmpegCmd.StdinPipe()
+	if err != nil {
+		log.Printf("failed to get ffmpeg stdin pipe: %v", err)
+		return fmt.Errorf("failed to get ffmpeg stdin pipe: %w", err)
+	}
+	h.frameWriter = stdinPipe
+
 	if err := h.ffmpegCmd.Start(); err != nil {
 		return fmt.Errorf("failed to start ffmpeg: %w", err)
 	}
 
-	fw, err := os.OpenFile(pipePath, os.O_WRONLY, 0600)
-	if err != nil {
-		_ = h.ffmpegCmd.Process.Kill()
-		return fmt.Errorf("failed to open fifo for writing: %w", err)
-	}
-	h.frameWriter = fw
-	go h.writeFramesToFFmpeg(h.frameWriter)
+	log.Printf("Starting to write frames to ffmpeg")
+	go h.writeFramesToFFmpeg()
 
 	log.Println("HLS converter started")
 	return nil
 }
 
-func (h *HLSConverter) writeFramesToFFmpeg(stdin *os.File) {
-	defer stdin.Close()
+func (h *HLSConverter) writeFramesToFFmpeg() {
+	if h.frameWriter == nil {
+		return
+	}
+	defer h.frameWriter.Close()
+	log.Printf("Starting to write frames to ffmpeg")
 
 	for frame := range h.Frames {
 		for _, chunk := range frame {
-			if _, err := stdin.Write(chunk); err != nil {
-				log.Printf("Error writing to ffmpeg pipe: %v", err)
+			log.Print("Frame")
+			if _, err := h.frameWriter.Write(chunk); err != nil {
+				log.Printf("Error writing to ffmpeg stdin: %v", err)
 				return
 			}
 		}
 	}
+
+	log.Printf("Frame channel closed, stopping write")
 }
 
 func (h *HLSConverter) Stop() error {

@@ -11,6 +11,8 @@ type ProtocolContextType = {
   setLastFrameTime: (time: Date) => void;
   lastFrameTime: string | null;
   isWebRtc: boolean;
+  p2pPlayer: string;
+  setP2pPlayer: (player: string) => void;
 };
 const ProtocolContext = createContext<ProtocolContextType | null>(null);
 
@@ -24,6 +26,7 @@ export const useProtocol = () => {
 
 export const ProtocolProvider = ({ children }: { children: React.ReactNode }) => {
   const [protocol, setProtocol] = useState<string>("WEBRTC_PROTOCOL");
+  const [p2pPlayer, setP2pPlayer] = useState<string>("m3u8");
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isWebRtc, setIsWebRtc] = useState(true);
@@ -45,6 +48,8 @@ export const ProtocolProvider = ({ children }: { children: React.ReactNode }) =>
       lastFrameTime,
       setLastFrameTime: handleSetLastFrameTime,
       isWebRtc,
+      p2pPlayer,
+      setP2pPlayer,
     }}>
       {children}
     </ProtocolContext.Provider>

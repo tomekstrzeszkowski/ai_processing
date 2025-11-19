@@ -21,18 +21,29 @@ const App = () => {
     setIsConnecting, 
     lastFrameTime,
     isWebRtc,
+    p2pPlayer,
+    protocol,
   } = useProtocol();
   const { handlePlayRef: wsHandlePlayRef, handleStopRef: wsHandleStopRef } = useWebSocket();
   const { handlePlayRef: webrtcHandlePlayRef, handleStopRef: webrtcHandleStopRef, offereeRef } = useWebRtc();
-  const [stream, setStream] = useState<MediaStream | null>(null);
-
+  const [stream, setStream] = useState<MediaStream | string | null>(null);
   useEffect(() => {
-    if (!isFocused || !(isWebRtc && isConnected)) return;
-    const firstKey = [...offereeRef.current.streamIdToStream.keys()]?.[0];
-    if (firstKey) {
-      const mainStream = offereeRef.current.streamIdToStream.get(firstKey);
-      if (mainStream) {
-        setStream(mainStream);
+    if (!isFocused || (isWebRtc && !isConnected)) return;
+    if (isWebRtc) {
+      const firstKey = [...offereeRef.current.streamIdToStream.keys()]?.[0];
+      if (firstKey) {
+        const mainStream = offereeRef.current.streamIdToStream.get(firstKey);
+        if (mainStream) {
+          setStream(mainStream);
+        }
+      }
+    } else {
+      if (p2pPlayer === "hls") {
+        setStream("http://localhost:7071/hls/stream.m3u8");
+        console.log("Set stream to HLS URL");
+      } else {
+        setStream("http://localhost:7071/stream");
+        console.log("Set stream to Image URL");
       }
     }
   }, [isFocused]);
@@ -62,17 +73,10 @@ const App = () => {
     };
   }, []);
 
-  // useEffect(() => {
-  //   console.log("STREAM", remoteStream)
-  //   setStream(remoteStream)
-  // }, [remoteStream])
-
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
-        {isWebRtc && <LiveVideoPlayer stream={stream} isConnected={isConnected} />}
-        {!isWebRtc && <LiveVideoPlayer streamUrl='http://localhost:7071/stream' isConnected={true} />}
-
+        <LiveVideoPlayer stream={stream} isConnected={true} />
         <View style={styles.connectionContainer}>
           <TouchableOpacity
             style={[styles.button, isConnected ? styles.disconnectButton : styles.connectButton]}

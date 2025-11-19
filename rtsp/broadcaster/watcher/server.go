@@ -32,22 +32,46 @@ const (
 )
 
 type Server struct {
-	port    uint16
-	Viewers []*connection.Viewer
-	Frames  chan [][]byte
+	port           uint16
+	Viewers        []*connection.Viewer
+	frames         chan [][]byte
+	frameListeners []chan [][]byte
+	listenerMux    sync.Mutex
 }
 
 func NewServer(port uint16) (*Server, error) {
-	receiver := &Server{
-		port:   port,
-		Frames: make(chan [][]byte, 1),
+	server := &Server{
+		port:           port,
+		frames:         make(chan [][]byte, 1),
+		frameListeners: []chan [][]byte{},
 	}
-	return receiver, nil
+	go server.broadcastFrames()
+	return server, nil
 }
 
+func (s *Server) registerFrameListener() chan [][]byte {
+	listener := make(chan [][]byte, 5)
+	s.listenerMux.Lock()
+	defer s.listenerMux.Unlock()
+	s.frameListeners = append(s.frameListeners, listener)
+	return listener
+}
+func (s *Server) broadcastFrames() {
+	for frames := range s.frames {
+		s.listenerMux.Lock()
+		for _, listener := range s.frameListeners {
+			select {
+			case listener <- frames:
+			default:
+				log.Print("Dropping frame for a listener")
+			}
+		}
+		s.listenerMux.Unlock()
+	}
+}
 func (s *Server) BroadcastFrame(frames [][]byte) {
 	log.Print("Broadcasting frame of size:", len(frames[0]))
-	s.Frames <- frames
+	s.frames <- frames
 }
 func (s *Server) AddViewer(v *connection.Viewer) {
 	for _, existingViewer := range s.Viewers {
@@ -105,6 +129,7 @@ func (s *Server) setCORSHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 }
+
 func (s *Server) serveStream(w http.ResponseWriter, r *http.Request) {
 	s.setCORSHeaders(w)
 	w.Header().Set("Content-Type", "multipart/x-mixed-replace; boundary=frame")
@@ -114,7 +139,10 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request) {
 	mw := multipart.NewWriter(w)
 	mw.SetBoundary("frame")
 
-	for frames := range s.Frames {
+	streamFrames := s.registerFrameListener()
+	defer close(streamFrames)
+
+	for frames := range streamFrames {
 		for _, frame := range frames {
 			fmt.Println("Serving frame of size:", len(frame))
 			img, _, err := image.Decode(bytes.NewReader(frame))
@@ -161,13 +189,29 @@ func writeJPEGFrame(mw *multipart.Writer, frame image.Image) error {
 	return nil
 }
 func (s *Server) PrepareEndpoints() {
+	hlsConverter, _ := NewHLSConverter("./hls_output", s.registerFrameListener())
+	hlsConverter.Start()
+	fileServer := http.FileServer(http.Dir("./hls_output"))
+	http.Handle("/hls/", http.StripPrefix("/hls/", func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Range")
+			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 
-	// hlsConverter, _ := NewHLSConverter("./hls_output", s.Frames)
-	// go hlsConverter.Start()
+			// Handle preflight OPTIONS request
+			if r.Method == "OPTIONS" {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
 
-	// Serve HLS files
-	//http.Handle("/hls/", http.StripPrefix("/hls/", http.FileServer(http.Dir("./hls_output"))))
+			// Serve the file
+			h.ServeHTTP(w, r)
+		})
+	}(fileServer)))
 
+	http.HandleFunc("/hls", fileServer.ServeHTTP)
 	http.HandleFunc("/video-list", s.getVideoList)
 	http.HandleFunc("/video/{name}", s.getVideo)
 	http.HandleFunc("/stream", s.serveStream)
