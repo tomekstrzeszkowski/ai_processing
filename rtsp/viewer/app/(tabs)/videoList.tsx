@@ -1,8 +1,8 @@
 import { VideoPlayer } from '@/components/VideoPlayer';
 // No external converter needed
+import { useP2p } from '@/app/p2pProvider';
 import { useProtocol } from '@/app/protocolProvider';
 import { useWebRtc } from '@/app/webRtcProvider';
-import { useWebSocket } from '@/app/websocketProvider';
 import { LiveVideoPlayer } from '@/components/LiveVideoPlayer';
 import { useIsFocused } from '@react-navigation/native';
 import React, { useEffect, useRef, useState } from 'react';
@@ -23,8 +23,8 @@ const ITEM_WIDTH = (width - (ITEM_MARGIN * (ITEMS_PER_ROW + 1))) / ITEMS_PER_ROW
 export default () => {
   const isFocused = useIsFocused();
   const { isWebRtc, isConnected } = useProtocol();
-  const { fetchVideoList: fetchVideoListWs, fetchVideo: fetchVideoWs } = useWebSocket();
-  const { handlePlayRef: webrtcHandlePlayRef, handleStopRef: webrtcHandleStopRef, offereeRef, setRemoteStream }= useWebRtc();
+  const { fetchVideoList: fetchVideoListWs, fetchVideo: fetchVideoWs } = useP2p();
+  const { handlePlayRef: webrtcHandlePlayRef, handleStopRef: webrtcHandleStopRef, offereeRef, setRemoteStream } = useWebRtc();
   const [items, setItems] = useState([]);
   const [videoData, setVideoData] = useState("");
   const [videoName, setVideoName] = useState("");
@@ -38,12 +38,10 @@ export default () => {
   });
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
 
-  // Cleanup MediaSource and blob URLs when component unmounts or video changes
   useEffect(() => {
     return () => {
       if (videoData && videoData.startsWith('blob:')) {
         const url = videoData;
-        // Give time for the video element to release the MediaSource
         setTimeout(() => {
           try {
             URL.revokeObjectURL(url);
@@ -55,7 +53,7 @@ export default () => {
     };
   }, [videoData]);
   useEffect(() => {
-    if (!isFocused || !(isWebRtc)) return;
+    if (!isFocused) return;
     if (items.length === 0) {
       fetchVideoList(startDate, endDate);
     }
@@ -81,9 +79,6 @@ export default () => {
     setItems([]);
     let items;
     if (isWebRtc) {
-      if (!offereeRef.current.isConnected()) {
-        await webrtcHandlePlayRef.current();
-      }
       items = await offereeRef.current.fetchVideoList(startDate, endDate);
     } else {
       items = await fetchVideoListWs(startDate, endDate);  

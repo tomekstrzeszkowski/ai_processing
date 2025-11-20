@@ -208,12 +208,6 @@ export class WebRtcOfferee{
         });
     };
     async fetchVideoList(startDate: string, endDate: string) {
-        try {
-            await this.waitForDataChannel();
-        } catch(err) {
-            console.error(err);
-            return [];
-        }
         return new Promise<Array<object>>((resolve, reject) => {
             if ("videoList" in this.dataChannelTimeoutToId) {
                 clearTimeout(this.dataChannelTimeoutToId["videoList"]);

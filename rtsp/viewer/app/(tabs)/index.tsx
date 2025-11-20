@@ -1,98 +1,24 @@
 import { useProtocol } from '@/app/protocolProvider';
-import { useWebRtc } from '@/app/webRtcProvider';
-import { useWebSocket } from '@/app/websocketProvider';
 import { LiveVideoPlayer } from '@/components/LiveVideoPlayer';
-import { useIsFocused } from '@react-navigation/native';
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
-  ActivityIndicator,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 const App = () => {
-  const isFocused = useIsFocused();
   const { 
-    isConnected, 
-    isConnecting, 
-    setIsConnecting, 
     lastFrameTime,
-    isWebRtc,
-    p2pPlayer,
-    protocol,
+    isConnected,
+    stream
   } = useProtocol();
-  const { handlePlayRef: wsHandlePlayRef, handleStopRef: wsHandleStopRef } = useWebSocket();
-  const { handlePlayRef: webrtcHandlePlayRef, handleStopRef: webrtcHandleStopRef, offereeRef } = useWebRtc();
-  const [stream, setStream] = useState<MediaStream | string | null>(null);
-  useEffect(() => {
-    if (!isFocused || (isWebRtc && !isConnected)) return;
-    if (isWebRtc) {
-      const firstKey = [...offereeRef.current.streamIdToStream.keys()]?.[0];
-      if (firstKey) {
-        const mainStream = offereeRef.current.streamIdToStream.get(firstKey);
-        if (mainStream) {
-          setStream(mainStream);
-        }
-      }
-    } else {
-      if (p2pPlayer === "hls") {
-        setStream("http://localhost:7071/hls/stream.m3u8");
-        console.log("Set stream to HLS URL");
-      } else {
-        setStream("http://localhost:7071/stream");
-        console.log("Set stream to Image URL");
-      }
-    }
-  }, [isFocused]);
-  const connect = () => {
-    if (isConnecting || isConnected) return;
-    setIsConnecting(true);
-    if (isWebRtc) {
-      webrtcHandlePlayRef.current((stream: MediaStream) => {
-        setStream(stream);
-      });
-    } else {
-      wsHandlePlayRef.current();
-    }
-  };
-
-  const disconnect = () => {
-    if (isWebRtc) {
-      webrtcHandleStopRef.current();
-    } else {
-      wsHandleStopRef.current();
-    }
-  };
-
-  useEffect(() => {
-    return () => {
-      wsHandleStopRef.current();
-    };
-  }, []);
 
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
-        <LiveVideoPlayer stream={stream} isConnected={true} />
-        <View style={styles.connectionContainer}>
-          <TouchableOpacity
-            style={[styles.button, isConnected ? styles.disconnectButton : styles.connectButton]}
-            onPress={isConnected ? disconnect : connect}
-            disabled={isConnecting}
-          >
-            {isConnecting ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={{color: "#fff", fontWeight: 700}}>
-                {isConnected ? 'Disconnect' : 'Connect'}
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
+        <LiveVideoPlayer stream={stream} isConnected={isConnected} />
         <View>
           {lastFrameTime && (
             <View style={{ flex: 1, color: "white", padding: 20}}>

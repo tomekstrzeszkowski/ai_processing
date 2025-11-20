@@ -53,9 +53,36 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({isConnected, st
           style={{ display: isConnected ? "block": "none", maxWidth: "100%", height: "auto" }}
           alt="Live stream"
       />}
-      {!isConnected && <View style={{display: "flex", alignSelf: "center"}}>
-        <Text style={{ color: "#b9b9b9ff" }}>Waiting for stream...</Text>
-      </View>}
+      {(!stream || !isConnected) && (
+        <View style={{
+          width: '100%',
+          height: "100%",
+          backgroundColor: '#1a1a1a',
+          borderRadius: 8,
+          overflow: 'hidden',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}>
+          <View style={{
+            position: 'absolute',
+            top: 0,
+            left: '-100%',
+            height: '100%',
+            width: '100%',
+            background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent)',
+            animation: 'shimmer 1.5s infinite'
+          }} />
+          <style>{`
+            @keyframes shimmer {
+              0% { left: -100%; }
+              100% { left: 100%; }
+            }
+          `}</style>
+          <View style={{display: "flex", alignSelf: "center"}}>
+            <Text style={{ color: "#b9b9b9ff" }}>Waiting for stream...</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }

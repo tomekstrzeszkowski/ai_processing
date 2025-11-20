@@ -4,7 +4,6 @@ import { SignalingMessage } from '@/helpers/message';
 import { WebSocketSignalingClient } from '@/helpers/signaling';
 import { WebRtcOfferee } from '@/helpers/webRtc';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
 
 
 type WebRtcContextType = {
@@ -33,9 +32,9 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
     setLastFrameTime, 
     isConnected,
     isWebRtc,
+    host,
   } = useProtocol();
   const { showAlert } = useToast();
-  const host = Platform.OS === 'web' ? (document.location.hostname || 'localhost') : "localhost";
   const signalingServerUrl = `ws://${host}:7070/ws`;
   const signalingClient = new WebSocketSignalingClient(11, signalingServerUrl);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -60,6 +59,7 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
         }
         try {
           await signalingClient.connect();
+          setIsConnecting(true);
           signalingClient.ws?.send(JSON.stringify({"type": "start"}))
         } catch (err) {
           setIsConnecting(false);

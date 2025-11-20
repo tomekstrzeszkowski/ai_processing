@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-
+import {
+  Platform
+} from 'react-native';
 
 type ProtocolContextType = {
   protocol: string;
@@ -13,6 +15,10 @@ type ProtocolContextType = {
   isWebRtc: boolean;
   p2pPlayer: string;
   setP2pPlayer: (player: string) => void;
+  stream: MediaStream | string | null;
+  setStream: (stream: MediaStream | string | null) => void;
+  host: string;
+  setHost: (host: string) => void;
 };
 const ProtocolContext = createContext<ProtocolContextType | null>(null);
 
@@ -31,6 +37,8 @@ export const ProtocolProvider = ({ children }: { children: React.ReactNode }) =>
   const [isConnecting, setIsConnecting] = useState(false);
   const [isWebRtc, setIsWebRtc] = useState(true);
   const [lastFrameTime, setLastFrameTime] = useState<string | null>(null);
+  const [stream, setStream] = useState<MediaStream | string | null>(null);
+  const [host, setHost] = useState<string>(Platform.OS === 'web' ? (document.location.hostname || 'localhost') : "localhost");
   function handleSetLastFrameTime(time: Date) {
     setLastFrameTime(time.toLocaleTimeString());
   };
@@ -50,6 +58,10 @@ export const ProtocolProvider = ({ children }: { children: React.ReactNode }) =>
       isWebRtc,
       p2pPlayer,
       setP2pPlayer,
+      stream,
+      setStream,
+      host,
+      setHost,
     }}>
       {children}
     </ProtocolContext.Provider>

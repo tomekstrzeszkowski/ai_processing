@@ -1,16 +1,78 @@
 
+import { useP2p } from '@/app/p2pProvider';
 import { useProtocol } from '@/app/protocolProvider';
+import { useWebRtc } from '@/app/webRtcProvider';
 import { Picker } from '@react-native-picker/picker';
 import React from 'react';
 import {
+  ActivityIndicator,
+  StyleSheet,
   Text,
+  TouchableOpacity,
   View
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 
 export default () => {
-  const { setProtocol, protocol, p2pPlayer, setP2pPlayer } = useProtocol();
+  const { 
+    setProtocol, 
+    protocol, 
+    isWebRtc,
+    p2pPlayer, 
+    setP2pPlayer,
+    isConnecting,
+    setIsConnecting, 
+    isConnected, 
+  } = useProtocol();
+  const { handlePlayRef: wsHandlePlayRef, handleStopRef: wsHandleStopRef } = useP2p();
+  const { handlePlayRef: webrtcHandlePlayRef, handleStopRef: webrtcHandleStopRef, offereeRef } = useWebRtc();
+    
+
+  const connect = () => {
+    if (isConnecting || isConnected) return;
+    setIsConnecting(true);
+    if (isWebRtc) {
+      webrtcHandlePlayRef.current((stream: MediaStream) => {
+      });
+    } else {
+      wsHandlePlayRef.current();
+    }
+  };
+
+  const disconnect = () => {
+    if (isWebRtc) {
+      webrtcHandleStopRef.current();
+    } else {
+      wsHandleStopRef.current();
+    }
+  };
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: '#1a1a1a',
+      color: "#b9b9b9ff",
+      overflow: "auto"
+    },
+    connectionContainer: {
+      padding: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: '#333',
+    },
+    button: {
+      padding: 15,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: 50,
+    },
+    connectButton: {
+      backgroundColor: '#4CAF50',
+    },
+    disconnectButton: {
+      backgroundColor: '#f44336',
+    },
+  });
   return (
     <SafeAreaProvider style={{backgroundColor: "#1a1a1a", color: "#b9b9b9ff"}}>
       <SafeAreaView>
@@ -36,7 +98,23 @@ export default () => {
             <Picker.Item label="Image" value="image" />
           </Picker>
         </View>)}
+        <View style={styles.connectionContainer}>
+          <TouchableOpacity
+            style={[styles.button, isConnected ? styles.disconnectButton : styles.connectButton]}
+            onPress={isConnected ? disconnect : connect}
+            disabled={isConnecting}
+          >
+            {isConnecting ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={{color: "#fff", fontWeight: 700}}>
+                {isConnected ? 'Disconnect' : 'Connect'}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
+      
     </SafeAreaProvider>
   );
 };
