@@ -1,14 +1,13 @@
-import { useProtocol } from '@/app/protocolProvider';
-import { useToast } from '@/app/toastProvider';
-import { SignalingMessage } from '@/helpers/message';
-import { WebSocketSignalingClient } from '@/helpers/signaling';
-import { WebRtcOfferee } from '@/helpers/webRtc';
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
-
+import { useProtocol } from "@/app/protocolProvider";
+import { useToast } from "@/app/toastProvider";
+import { SignalingMessage } from "@/helpers/message";
+import { WebSocketSignalingClient } from "@/helpers/signaling";
+import { WebRtcOfferee } from "@/helpers/webRtc";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 
 type WebRtcContextType = {
   remoteStream: MediaStream | null;
-  setRemoteStream: Function,
+  setRemoteStream: Function;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   handlePlayRef: React.RefObject<Function>;
   handleStopRef: React.RefObject<Function>;
@@ -19,32 +18,36 @@ const WebRtcContext = createContext<WebRtcContextType | null>(null);
 export const useWebRtc = () => {
   const context = useContext(WebRtcContext);
   if (!context) {
-    throw new Error('useWebRtc must be used within a WebRtcProvider');
+    throw new Error("useWebRtc must be used within a WebRtcProvider");
   }
   return context;
 };
-  
+
 export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const {
-    setIsConnected, 
-    setIsConnecting, 
-    setLastFrameTime, 
+    setIsConnected,
+    setIsConnecting,
+    setLastFrameTime,
     isConnected,
     isWebRtc,
     host,
   } = useProtocol();
-  const { showAlert } = useToast();
-  const signalingServerUrl = `ws://${host}:7070/ws`;
+  const signalingHost =
+    process.env.EXPO_PUBLIC_SIGNALING_WEBSOCKET_HOST ??
+    host.replace(/https?/, "ws");
+  const signalingServerUrl = `${signalingHost}/ws`;
   const signalingClient = new WebSocketSignalingClient(11, signalingServerUrl);
   const videoRef = useRef<HTMLVideoElement>(null);
   const frameInterval = useRef<number | null>(null);
   const handlePlayRef = useRef<Function>(() => {});
   const handleStopRef = useRef<Function>(() => {});
-  const offereeRef = useRef<WebRtcOfferee>(new WebRtcOfferee((state) => {
-    setIsConnecting(false);
-    setIsConnected(state === "connected");
-  }));
+  const offereeRef = useRef<WebRtcOfferee>(
+    new WebRtcOfferee((state) => {
+      setIsConnecting(false);
+      setIsConnected(state === "connected");
+    }),
+  );
 
   useEffect(() => {
     const handlePlay = () => handlePlayRef.current();
@@ -53,65 +56,72 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
     videoRef.current?.addEventListener("pause", handlePause);
 
     handlePlayRef.current = async (setStreamTrack: Function | null) => {
-        const offeree = offereeRef.current;
-        if (!isWebRtc || ["connected", "connecting"].includes(offeree.pc?.connectionState ?? "")) {
-            return;
-        }
+      const offeree = offereeRef.current;
+      if (
+        !isWebRtc ||
+        ["connected", "connecting"].includes(offeree.pc?.connectionState ?? "")
+      ) {
+        return;
+      }
+      try {
+        await signalingClient.connect();
+        setIsConnecting(true);
+        signalingClient.ws?.send(JSON.stringify({ type: "start" }));
+      } catch (err) {
+        setIsConnecting(false);
+        console.error(err);
+        return;
+      }
+      offeree.initializePeerConnection();
+      if (setStreamTrack) {
+        offeree.onTrack(setStreamTrack);
+      }
+      signalingClient.onIce(async (candidates) => {
         try {
-          await signalingClient.connect();
-          setIsConnecting(true);
-          signalingClient.ws?.send(JSON.stringify({"type": "start"}))
-        } catch (err) {
-          setIsConnecting(false);
-          console.error(err);
-          showAlert("Can not connect to signaling server. Try again later")
+          await offeree.handleIceCandidates({
+            ice: candidates.ice as RTCIceCandidate[],
+          });
+        } catch (error) {
+          console.error("Error handling ICE candidates:", error, candidates);
+        }
+      });
+      signalingClient.onOffer(async (offer: SignalingMessage) => {
+        console.log("onOffer");
+        if (
+          offeree.pc?.connectionState === "closed" ||
+          offeree.pc?.signalingState === "closed"
+        ) {
+          //can be closed by other peer
+          offeree.initializePeerConnection();
+          if (setStreamTrack) {
+            offeree.onTrack(setStreamTrack);
+          }
+          return;
+        } else if (offeree.pc?.connectionState === "connected") {
           return;
         }
-        offeree.initializePeerConnection();
-        if (setStreamTrack) {
-          offeree.onTrack(setStreamTrack);
+        const sdp = String(offer.sdp);
+        console.log("signaling state", offeree.pc?.signalingState);
+        await offeree.pc?.setRemoteDescription({ sdp, type: "offer" });
+        if (offeree.pc?.signalingState === "stable") return;
+        const answer = await offeree.pc?.createAnswer();
+        try {
+          await offeree.pc?.setLocalDescription(answer);
+        } catch (error) {
+          console.error(error);
+          return;
         }
-        signalingClient.onIce(async candidates => {
-          try{
-            await offeree.handleIceCandidates({ice: candidates.ice as RTCIceCandidate[]});
-          } catch (error) {
-            console.error("Error handling ICE candidates:", error, candidates);
-          }
-        }); 
-        signalingClient.onOffer(async (offer: SignalingMessage) => {
-          console.log('onOffer')
-          if (offeree.pc?.connectionState === "closed" || offeree.pc?.signalingState === "closed") {
-            //can be closed by other peer
-            offeree.initializePeerConnection();
-            if (setStreamTrack) {
-              offeree.onTrack(setStreamTrack);
-            }
-            return;
-          } else if (offeree.pc?.connectionState === "connected") {
-            return;
-          }
-          const sdp = String(offer.sdp);
-          console.log("signaling state", offeree.pc?.signalingState);
-          await offeree.pc?.setRemoteDescription({sdp, type: 'offer'});
-          if (offeree.pc?.signalingState === "stable") return;
-          const answer = await offeree.pc?.createAnswer();
-          try {
-            await offeree.pc?.setLocalDescription(answer);
-          } catch (error) {
-            console.error(error)
-            return;
-          }
-          if(!answer) return;
-          signalingClient.sendAnswer(answer);
-          await offeree.waitForCandidates();
-          console.log("icCandidates Generated", offeree.iceCandidatesGenerated)
-          signalingClient.sendIceCandidates(offeree.iceCandidatesGenerated);
-        });
+        if (!answer) return;
+        signalingClient.sendAnswer(answer);
+        await offeree.waitForCandidates();
+        console.log("icCandidates Generated", offeree.iceCandidatesGenerated);
+        signalingClient.sendIceCandidates(offeree.iceCandidatesGenerated);
+      });
     };
     handleStopRef.current = () => {
       if (offereeRef.current.dataChannel) {
-        signalingClient.ws?.send(JSON.stringify({type: "disconnected"}))
-        offereeRef.current.dataChannel.send(JSON.stringify({type: "close"}))
+        signalingClient.ws?.send(JSON.stringify({ type: "disconnected" }));
+        offereeRef.current.dataChannel.send(JSON.stringify({ type: "close" }));
       }
       signalingClient.disconnect();
       offereeRef.current.close();
@@ -123,7 +133,7 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
       console.log("Cleaning up WebRTC connections");
       //offereeRef.current.close();
       handleStopRef.current();
-    }
+    };
   }, []);
   useEffect(() => {
     if (videoRef.current && remoteStream) {
@@ -147,14 +157,16 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [isConnected]);
   return (
-    <WebRtcContext.Provider value={{
-      remoteStream,
-      setRemoteStream,
-      videoRef,
-      handlePlayRef,
-      handleStopRef,
-      offereeRef,
-    }}>
+    <WebRtcContext.Provider
+      value={{
+        remoteStream,
+        setRemoteStream,
+        videoRef,
+        handlePlayRef,
+        handleStopRef,
+        offereeRef,
+      }}
+    >
       {children}
     </WebRtcContext.Provider>
   );

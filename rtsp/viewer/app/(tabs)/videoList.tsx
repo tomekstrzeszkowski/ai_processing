@@ -1,30 +1,30 @@
-import { VideoPlayer } from '@/components/VideoPlayer';
+import { VideoPlayer } from "@/components/VideoPlayer";
 // No external converter needed
-import { useP2p } from '@/app/p2pProvider';
-import { useProtocol } from '@/app/protocolProvider';
-import { useWebRtc } from '@/app/webRtcProvider';
-import { LiveVideoPlayer } from '@/components/LiveVideoPlayer';
-import { useIsFocused } from '@react-navigation/native';
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  Button,
-  Dimensions,
-  ScrollView,
-  StyleSheet,
-  View
-} from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { useP2p } from "@/app/p2pProvider";
+import { useProtocol } from "@/app/protocolProvider";
+import { useWebRtc } from "@/app/webRtcProvider";
+import { LiveVideoPlayer } from "@/components/LiveVideoPlayer";
+import { useIsFocused } from "@react-navigation/native";
+import React, { useEffect, useRef, useState } from "react";
+import { Button, Dimensions, ScrollView, StyleSheet, View } from "react-native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 const ITEM_MARGIN = 5;
 const ITEMS_PER_ROW = 6;
-const ITEM_WIDTH = (width - (ITEM_MARGIN * (ITEMS_PER_ROW + 1))) / ITEMS_PER_ROW;
+const ITEM_WIDTH = (width - ITEM_MARGIN * (ITEMS_PER_ROW + 1)) / ITEMS_PER_ROW;
 
-export default () => {
+export default function videoList() {
   const isFocused = useIsFocused();
   const { isWebRtc, isConnected } = useProtocol();
-  const { fetchVideoList: fetchVideoListWs, fetchVideo: fetchVideoWs } = useP2p();
-  const { handlePlayRef: webrtcHandlePlayRef, handleStopRef: webrtcHandleStopRef, offereeRef, setRemoteStream } = useWebRtc();
+  const { fetchVideoList: fetchVideoListWs, fetchVideo: fetchVideoWs } =
+    useP2p();
+  const {
+    handlePlayRef: webrtcHandlePlayRef,
+    handleStopRef: webrtcHandleStopRef,
+    offereeRef,
+    setRemoteStream,
+  } = useWebRtc();
   const [items, setItems] = useState([]);
   const [videoData, setVideoData] = useState("");
   const [videoName, setVideoName] = useState("");
@@ -34,19 +34,21 @@ export default () => {
   const [startDate, setStartDate] = useState(() => {
     const before = new Date();
     before.setDate(before.getDate() - 7);
-    return before.toISOString().split('T')[0];
+    return before.toISOString().split("T")[0];
   });
-  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(
+    new Date().toISOString().split("T")[0],
+  );
 
   useEffect(() => {
     return () => {
-      if (videoData && videoData.startsWith('blob:')) {
+      if (videoData && videoData.startsWith("blob:")) {
         const url = videoData;
         setTimeout(() => {
           try {
             URL.revokeObjectURL(url);
           } catch (e) {
-            console.warn('Error revoking URL:', e);
+            console.warn("Error revoking URL:", e);
           }
         }, 100);
       }
@@ -64,7 +66,7 @@ export default () => {
       videoPlayerRef.current?.measureInWindow((x, y) => {
         scrollViewRef.current?.scrollTo({
           y,
-          animated: false
+          animated: false,
         });
       });
     }
@@ -74,14 +76,14 @@ export default () => {
     setStartDate(startDate);
     setEndDate(endDate);
     fetchVideoList(startDate, endDate);
-  }
+  };
   const fetchVideoList = async (startDate: string, endDate: string) => {
     setItems([]);
     let items;
     if (isWebRtc) {
       items = await offereeRef.current.fetchVideoList(startDate, endDate);
     } else {
-      items = await fetchVideoListWs(startDate, endDate);  
+      items = await fetchVideoListWs(startDate, endDate);
     }
     setItems(items);
   };
@@ -92,7 +94,7 @@ export default () => {
       const stream = await offereeRef.current.fetchVideo(nameToFetch);
       if (stream) setStream(stream);
     } else {
-      const {name, videoUrl} = await fetchVideoWs(nameToFetch);
+      const { name, videoUrl } = await fetchVideoWs(nameToFetch);
       setVideoData(videoUrl);
       setVideoName(name);
     }
@@ -103,7 +105,7 @@ export default () => {
 
   const renderVideoItem = (item: any, index: number) => (
     <View key={index} style={styles.gridItem}>
-      <Button 
+      <Button
         title={`${item.Name} (${item.Size ?? "-"})`}
         color="#007AFF"
         onPress={() => {
@@ -116,18 +118,21 @@ export default () => {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
-        <ScrollView 
+        <ScrollView
           ref={scrollViewRef}
-          contentContainerStyle={styles.scrollContent}>
+          contentContainerStyle={styles.scrollContent}
+        >
           <View>
-            <View style={{ 
-              display: 'flex', 
-              padding: 20, 
-              alignItems: 'center', 
-              alignSelf: 'center',
-              gap: 10,
-              flexDirection: "column",
-            }}>
+            <View
+              style={{
+                display: "flex",
+                padding: 20,
+                alignItems: "center",
+                alignSelf: "center",
+                gap: 10,
+                flexDirection: "column",
+              }}
+            >
               <input
                 type="date"
                 value={startDate}
@@ -147,28 +152,36 @@ export default () => {
             {items.map((item, index) => renderVideoItem(item, index))}
           </View>
           <View ref={videoPlayerRef}>
-            {!isWebRtc && <VideoPlayer videoUrl={videoData} name={videoName} scrollView={scrollViewRef} />}
-            {isWebRtc && <LiveVideoPlayer stream={stream} isConnected={isConnected} />}
+            {!isWebRtc && (
+              <VideoPlayer
+                videoUrl={videoData}
+                name={videoName}
+                scrollView={scrollViewRef}
+              />
+            )}
+            {isWebRtc && (
+              <LiveVideoPlayer stream={stream} isConnected={isConnected} />
+            )}
           </View>
         </ScrollView>
       </SafeAreaView>
     </SafeAreaProvider>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
-    color: "#b9b9b9ff"
+    backgroundColor: "#1a1a1a",
+    color: "#b9b9b9ff",
   },
   scrollContent: {
     flexGrow: 1,
   },
   gridContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-around',
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-around",
     paddingHorizontal: ITEM_MARGIN / 2,
     paddingTop: 10,
   },
