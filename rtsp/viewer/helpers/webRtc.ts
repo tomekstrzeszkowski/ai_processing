@@ -220,16 +220,8 @@ export class WebRtcOfferee{
         });
     };
     async fetchVideo(videoName: string) {
-        try {
-            await this.waitForDataChannel();
-        } catch(err) {
-            console.error(err);
-            return
-        }
         const dataChannel = this.dataChannel;
         const pc = this.pc;
-        this.pc?.addEventListener("track", (e) => {
-        });
         this.registerOrSkipDataChannelListener("offer", async function (offer: any) {
             console.log("got new offer");
             if (!pc || !dataChannel) {

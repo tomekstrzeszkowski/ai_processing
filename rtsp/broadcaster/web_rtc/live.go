@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"path/filepath"
 
 	_ "image/jpeg"
 	_ "image/png"
@@ -19,26 +18,6 @@ func listen(wsClient *websocket.Conn, videoTrack *VideoTrack, savePath string) {
 	offeror, _ := NewOfferor(wsClient, savePath)
 	defer offeror.Close()
 	offeror.CreatePeerConnection(videoTrack)
-	filePath := filepath.Join(offeror.savedVideoPath, "2025-11-11-1.mp4")
-	staticVideoTrack, err := NewStaticVideoTrack()
-	if err := staticVideoTrack.LoadVideo(filePath); err != nil {
-		log.Fatal(err)
-		return
-	}
-	rtpSender, err := offeror.pc.AddTrack(staticVideoTrack.track)
-	staticVideoTrack.Play()
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-	go func() {
-		rtcpBuf := make([]byte, 1500)
-		for {
-			if _, _, err := rtpSender.Read(rtcpBuf); err != nil {
-				return
-			}
-		}
-	}()
 	offeror.CreateAndSendOffer()
 	for {
 		_, message, err := wsClient.ReadMessage()

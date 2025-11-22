@@ -197,7 +197,7 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 
 				staticVideoTrack.rtpSender = rtpSender
 				o.startRTCPReader(rtpSender)
-				staticVideoTrack.Play()
+				staticVideoTrack.Play(true)
 				offer, err := o.PrepareOffer()
 				if err != nil {
 					log.Printf("Error preparing offer: %v", err)
@@ -205,14 +205,15 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 				}
 				dataChannel.Send(offer)
 			} else {
-				fmt.Printf("Replacing video with %s\n", filePath)
+				fmt.Printf("Replacing video with %s, old video pos %s", filePath, o.staticVideoTrack.currentPos.String())
 				o.staticVideoTrack.Pause()
+				// delay here is needed to ensure the track is paused
 				time.Sleep(50 * time.Millisecond)
 				if err := o.staticVideoTrack.LoadVideo(filePath); err != nil {
 					log.Printf("Error loading video: %v", err)
 					return
 				}
-				o.staticVideoTrack.Play()
+				o.staticVideoTrack.Play(false)
 			}
 		case "answer":
 			answer := webrtc.SessionDescription{
@@ -222,6 +223,8 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 			if err := o.pc.SetRemoteDescription(answer); err != nil {
 				log.Printf("Error setting remote description: %v", err)
 			}
+		case "seek":
+			o.staticVideoTrack.Seek(time.Duration(message.Seek) * time.Second)
 		}
 
 	})

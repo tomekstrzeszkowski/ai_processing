@@ -4,6 +4,7 @@ import { useP2p } from "@/app/p2pProvider";
 import { useProtocol } from "@/app/protocolProvider";
 import { useWebRtc } from "@/app/webRtcProvider";
 import { LiveVideoPlayer } from "@/components/LiveVideoPlayer";
+import { formatBytes } from "@/helpers/verbose";
 import { useIsFocused } from "@react-navigation/native";
 import React, { useEffect, useRef, useState } from "react";
 import { Button, Dimensions, ScrollView, StyleSheet, View } from "react-native";
@@ -56,6 +57,12 @@ export default function videoList() {
   }, [videoData]);
   useEffect(() => {
     if (!isFocused) return;
+    if (!isConnected) {
+      setItems([]);
+      setVideoData("");
+      setVideoName("");
+      return;
+    }
     if (items.length === 0) {
       fetchVideoList(startDate, endDate);
     }
@@ -87,7 +94,7 @@ export default function videoList() {
     }
     setItems(items);
   };
-  const fetchVideo = async (nameToFetch: string) => {
+  async function fetchVideo (nameToFetch: string) {
     setVideoData("");
     setVideoName("");
     if (isWebRtc) {
@@ -102,11 +109,17 @@ export default function videoList() {
       scrollToVideoPlayer();
     }, 100);
   };
+  async function seek() {
+    if (!isWebRtc) return;
+    await offereeRef.current.dataChannel?.send(
+      JSON.stringify({ type: "seek", seek: 30 }),
+    );
+  }
 
   const renderVideoItem = (item: any, index: number) => (
     <View key={index} style={styles.gridItem}>
       <Button
-        title={`${item.Name} (${item.Size ?? "-"})`}
+        title={`${item.Name} (${formatBytes(item.Size)})`}
         color="#007AFF"
         onPress={() => {
           fetchVideo(item.Name);
@@ -130,7 +143,7 @@ export default function videoList() {
                 alignItems: "center",
                 alignSelf: "center",
                 gap: 10,
-                flexDirection: "column",
+                flexDirection: "row",
               }}
             >
               <input
@@ -145,6 +158,11 @@ export default function videoList() {
                 onChange={(e) => onChangeDateRange(startDate, e.target.value)}
                 min={startDate}
                 style={{ display: "block" }}
+              />
+              <Button
+                title="SEEK"
+                color="#ee8700ff"
+                onPress={() => seek()}
               />
             </View>
           </View>
@@ -181,7 +199,6 @@ const styles = StyleSheet.create({
   gridContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "space-around",
     paddingHorizontal: ITEM_MARGIN / 2,
     paddingTop: 10,
   },

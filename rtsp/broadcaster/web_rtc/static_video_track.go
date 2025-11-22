@@ -44,7 +44,7 @@ func NewStaticVideoTrack() (*StaticVideoTrack, error) {
 		track:    track,
 		ctx:      ctx,
 		cancel:   cancel,
-		frameDur: time.Millisecond * 33, // 30fps to match your ffmpeg config
+		frameDur: time.Millisecond * 33,
 	}, nil
 }
 
@@ -79,7 +79,7 @@ func (vt *StaticVideoTrack) LoadVideo(filePath string) error {
 	return nil
 }
 
-func (vt *StaticVideoTrack) Play() {
+func (vt *StaticVideoTrack) Play(isLoop bool) {
 	vt.mu.Lock()
 	if vt.playing {
 		vt.mu.Unlock()
@@ -88,7 +88,7 @@ func (vt *StaticVideoTrack) Play() {
 	vt.playing = true
 	vt.mu.Unlock()
 
-	go vt.playLoop()
+	go vt.playLoop(isLoop)
 }
 
 func (vt *StaticVideoTrack) Pause() {
@@ -115,6 +115,7 @@ func (vt *StaticVideoTrack) Seek(position time.Duration) error {
 	}
 	vt.reader = reader
 	targetFrame := int64(position / vt.frameDur)
+	log.Print("Seeking to frame ", targetFrame)
 	currentFrame := int64(0)
 	foundKeyframe := false
 
@@ -180,19 +181,20 @@ func (vt *StaticVideoTrack) playLoop(isLoop bool) {
 			nal, err := vt.reader.NextNAL()
 			if err != nil {
 				if err == io.EOF {
-					log.Printf("Video playback finished (EOF)\n")
+					log.Printf("Video playback finished (EOF) %s", vt.currentPos.String())
 					if isLoop {
 						vt.file.Seek(0, io.SeekStart)
 						reader, _ := h264reader.NewReader(vt.file)
 						vt.reader = reader
 						vt.currentPos = 0
 						vt.frameCount = 0
+						vt.mu.Unlock()
+						continue
 					} else {
 						vt.playing = false
 						vt.mu.Unlock()
 						return
 					}
-					vt.mu.Unlock()
 				}
 				log.Printf("Error reading NAL: %v\n", err)
 				vt.mu.Unlock()
