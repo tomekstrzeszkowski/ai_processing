@@ -1,11 +1,14 @@
 package watcher
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -112,7 +115,6 @@ func (c *Converter) convert(chunkPath string) error {
 	fmt.Printf("[FPS:%f] Converting frames in %s %v\n", *c.Framerate, dateDirName, patches)
 	outputPath := filepath.Join(append(patches[:len(patches)-2], fmt.Sprintf("%s-%s.mp4", dateDirName, chunkDirName))...)
 
-	// FFmpeg command arguments
 	args := []string{
 		"-framerate", fmt.Sprintf("%d", int(math.Ceil(*c.Framerate))),
 		"-i", inputPattern,
@@ -128,19 +130,30 @@ func (c *Converter) convert(chunkPath string) error {
 		"-f", "h264",
 		outputPath,
 	}
+	var stderr bytes.Buffer
 	cmd := exec.Command("ffmpeg", args...)
 	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stderr = &stderr
 
 	// Run the command
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("ffmpeg conversion failed: %w", err)
 	}
-
-	fmt.Printf("Successfully converted frames to %s\n", outputPath)
+	duration := parseDurationFromFFmpegOutput(stderr.String())
+	fmt.Printf("FFmpeg conversion succeeded: %s (%.2f seconds)\n", outputPath, duration)
 	return nil
 }
-
+func parseDurationFromFFmpegOutput(output string) float64 {
+	re := regexp.MustCompile(`Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})`)
+	matches := re.FindStringSubmatch(output)
+	if len(matches) == 4 {
+		hours, _ := strconv.ParseFloat(matches[1], 64)
+		minutes, _ := strconv.ParseFloat(matches[2], 64)
+		seconds, _ := strconv.ParseFloat(matches[3], 64)
+		return hours*3600 + minutes*60 + seconds
+	}
+	return 0
+}
 func (c *Converter) convertLastChunkToVideo(savePath string) bool {
 	dirCount := CountChunksInDateDir(savePath, []string{})
 	fmt.Printf("Number of chunks in date dir: %d\n", dirCount)

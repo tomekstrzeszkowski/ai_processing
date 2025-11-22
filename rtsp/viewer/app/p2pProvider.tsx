@@ -36,10 +36,10 @@ export const P2pProvider = ({ children }: { children: React.ReactNode }) => {
     } finally {
       setIsConnecting(false);
     }
+    setIsConnected(true);
     if (callback) {
       callback();
     }
-    setIsConnected(true);
   };
 
   handleStopRef.current = function () {};

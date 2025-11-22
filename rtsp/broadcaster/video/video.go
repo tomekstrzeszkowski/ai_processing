@@ -266,7 +266,6 @@ func ConvertAndGetVideoForWeb(filePath string) ([]byte, error) {
 		return nil, fmt.Errorf("error converting video: %v\nFFmpeg error: %s", err, stderr.String())
 	}
 
-	// Read the entire file into memory
 	videoBytes, err := os.ReadFile(tempFile.Name())
 	if err != nil {
 		return nil, fmt.Errorf("error reading converted file: %v", err)

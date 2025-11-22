@@ -1,7 +1,7 @@
 import { useP2p } from "@/app/p2pProvider";
 import { useProtocol } from "@/app/protocolProvider";
-import { useWebRtc } from "@/app/webRtcProvider";
 import { useToast } from "@/app/toastProvider";
+import { useWebRtc } from "@/app/webRtcProvider";
 import { Picker } from "@react-native-picker/picker";
 import React from "react";
 import {
@@ -24,13 +24,13 @@ export default function settings() {
     isConnecting,
     setIsConnecting,
     isConnected,
+    setIsConnected,
   } = useProtocol();
   const { handlePlayRef: p2pHandlePlayRef, handleStopRef: p2pHandleStopRef } =
     useP2p();
   const {
     handlePlayRef: webrtcHandlePlayRef,
     handleStopRef: webrtcHandleStopRef,
-    offereeRef,
   } = useWebRtc();
 
   const connect = async () => {
@@ -41,9 +41,6 @@ export default function settings() {
     } else {
       await p2pHandlePlayRef.current();
     }
-    if (!isConnecting && !isConnected) {
-      showAlert("Can not connect to the server. Try again later");
-    }
   };
 
   const disconnect = () => {
@@ -52,6 +49,7 @@ export default function settings() {
     } else {
       p2pHandleStopRef.current();
     }
+    setIsConnected(false);
   };
   const styles = StyleSheet.create({
     container: {

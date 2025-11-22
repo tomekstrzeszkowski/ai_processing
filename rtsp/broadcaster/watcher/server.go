@@ -100,7 +100,6 @@ func (s *Server) getVideo(w http.ResponseWriter, r *http.Request) {
 	_, err := io.Copy(w, reader)
 	if err != nil {
 		log.Printf("Error streaming video: %v", err)
-		// Note: Can't write error header here as we've already written the success header
 		return
 	}
 }
@@ -165,13 +164,10 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeJPEGFrame(mw *multipart.Writer, frame image.Image) error {
-	// Create JPEG buffer
 	var buf bytes.Buffer
 	if err := jpeg.Encode(&buf, frame, &jpeg.Options{Quality: 80}); err != nil {
 		return err
 	}
-
-	// Write multipart header
 	header := textproto.MIMEHeader{}
 	header.Set("Content-Type", "image/jpeg")
 	header.Set("Content-Length", fmt.Sprintf("%d", buf.Len()))
@@ -180,8 +176,6 @@ func writeJPEGFrame(mw *multipart.Writer, frame image.Image) error {
 	if err != nil {
 		return err
 	}
-
-	// Write JPEG data
 	if _, err := part.Write(buf.Bytes()); err != nil {
 		return err
 	}
@@ -218,6 +212,7 @@ func (s *Server) PrepareEndpoints() {
 
 	// Serve static files for testing
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		s.setCORSHeaders(w)
 		html := `
 <!DOCTYPE html>
 <html>

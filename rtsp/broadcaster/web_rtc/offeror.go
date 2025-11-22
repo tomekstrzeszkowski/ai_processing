@@ -172,43 +172,47 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 				dataChannel.Send(responseMessage)
 			}
 		case "video":
-			// when adding video re-negotation is needed, exchange offer via dataChannel
-			fmt.Printf("Adding video track %s", message.VideoName)
+			// when adding video re-negotiation is needed, exchange offer via dataChannel
+			fmt.Printf("Adding video track %s\n", message.VideoName)
 			filePath := filepath.Join(o.savedVideoPath, message.VideoName)
+
 			if o.staticVideoTrack == nil {
 				staticVideoTrack, err := NewStaticVideoTrack()
+				if err != nil {
+					log.Printf("Error creating static video track: %v", err)
+					return
+				}
 				o.staticVideoTrack = staticVideoTrack
+
 				if err := staticVideoTrack.LoadVideo(filePath); err != nil {
-					log.Fatal(err)
+					log.Printf("Error loading video: %v", err)
 					return
 				}
-				// videoBytes, _ := video.GetVideoByPath(filePath)
+
 				rtpSender, err := o.pc.AddTrack(staticVideoTrack.track)
+				if err != nil {
+					log.Printf("Error adding track: %v", err)
+					return
+				}
+
+				staticVideoTrack.rtpSender = rtpSender
+				o.startRTCPReader(rtpSender)
 				staticVideoTrack.Play()
-				if err != nil {
-					log.Fatal(err)
-					return
-				}
-				go func() {
-					rtcpBuf := make([]byte, 1500)
-					for {
-						if _, _, err := rtpSender.Read(rtcpBuf); err != nil {
-							return
-						}
-					}
-				}()
-				if err != nil {
-					log.Fatal(err)
-					return
-				}
 				offer, err := o.PrepareOffer()
 				if err != nil {
+					log.Printf("Error preparing offer: %v", err)
 					return
 				}
 				dataChannel.Send(offer)
 			} else {
-				fmt.Printf("load video %s", filePath)
-				o.staticVideoTrack.LoadVideo(filePath)
+				fmt.Printf("Replacing video with %s\n", filePath)
+				o.staticVideoTrack.Pause()
+				time.Sleep(50 * time.Millisecond)
+				if err := o.staticVideoTrack.LoadVideo(filePath); err != nil {
+					log.Printf("Error loading video: %v", err)
+					return
+				}
+				o.staticVideoTrack.Play()
 			}
 		case "answer":
 			answer := webrtc.SessionDescription{
@@ -230,16 +234,19 @@ func (o *Offeror) HandleVideoTrack() error {
 		log.Fatal(err)
 		return err
 	}
-	// prevent video clogging and flush the buffer
+	o.startRTCPReader(rtpSender)
+	return nil
+}
+func (o *Offeror) startRTCPReader(rtpSender *webrtc.RTPSender) {
 	go func() {
 		rtcpBuf := make([]byte, 1500)
 		for {
 			if _, _, err := rtpSender.Read(rtcpBuf); err != nil {
+				log.Printf("RTCP reader stopped: %v", err)
 				return
 			}
 		}
 	}()
-	return nil
 }
 func (o *Offeror) PrepareOffer() ([]byte, error) {
 	offer, err := o.pc.CreateOffer(nil)

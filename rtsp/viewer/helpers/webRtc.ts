@@ -215,6 +215,7 @@ export class WebRtcOfferee{
             this.registerOrSkipDataChannelListener("videoList", function (data: any) {
                 resolve(data.videoList);
             });
+            console.log("fetchVideoList sending request", startDate, endDate);
             this.dataChannel?.send(JSON.stringify({type: "videoList", startDate, endDate}));
         });
     };

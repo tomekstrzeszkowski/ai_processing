@@ -124,7 +124,6 @@ func (v *Viewer) GetVideo(name string) []byte {
 	}
 	defer stream.Close()
 	stream.Write([]byte(name + "\n"))
-	//video.ReceiveVideoFile(stream, "./client_video")
 	data, err := io.ReadAll(stream)
 	if err != nil {
 		log.Printf("Error reading stream: %v", err)
