@@ -136,7 +136,7 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 		fmt.Println("Data channel closed")
 	})
 	dataChannel.OnMessage(func(dataChannelMessage webrtc.DataChannelMessage) {
-		fmt.Printf("Message from data channel: %s\n", string(dataChannelMessage.Data))
+		//fmt.Printf("Message from data channel: %s\n", string(dataChannelMessage.Data))
 		var message DataChannelMessage
 		if err := json.Unmarshal(dataChannelMessage.Data, &message); err != nil {
 			log.Fatal("Can not parse message in data channel")
@@ -172,11 +172,10 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 				dataChannel.Send(responseMessage)
 			}
 		case "video":
-			// when adding video re-negotiation is needed, exchange offer via dataChannel
-			fmt.Printf("Adding video track %s\n", message.VideoName)
 			filePath := filepath.Join(o.savedVideoPath, message.VideoName)
 
 			if o.staticVideoTrack == nil {
+				fmt.Printf(("New static video track %s\n"), filePath)
 				staticVideoTrack, err := NewStaticVideoTrack()
 				if err != nil {
 					log.Printf("Error creating static video track: %v", err)
@@ -205,10 +204,8 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 				}
 				dataChannel.Send(offer)
 			} else {
-				fmt.Printf("Replacing video with %s, old video pos %s", filePath, o.staticVideoTrack.currentPos.String())
+				fmt.Printf("Replacing video with %s, old video pos %s\n", filePath, o.staticVideoTrack.currentPos.String())
 				o.staticVideoTrack.Pause()
-				// delay here is needed to ensure the track is paused
-				time.Sleep(50 * time.Millisecond)
 				if err := o.staticVideoTrack.LoadVideo(filePath); err != nil {
 					log.Printf("Error loading video: %v", err)
 					return

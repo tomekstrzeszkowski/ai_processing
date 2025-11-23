@@ -19,6 +19,8 @@ type StaticVideoTrack struct {
 	mu         sync.RWMutex
 	ctx        context.Context
 	cancel     context.CancelFunc
+	playCtx    context.Context
+	playCancel context.CancelFunc
 	reader     *h264reader.H264Reader
 	file       *os.File
 	frameDur   time.Duration
@@ -26,6 +28,7 @@ type StaticVideoTrack struct {
 	currentPos time.Duration
 	frameCount int64
 	rtpSender  *webrtc.RTPSender
+	playWait   sync.WaitGroup
 }
 
 func NewStaticVideoTrack() (*StaticVideoTrack, error) {
@@ -39,12 +42,15 @@ func NewStaticVideoTrack() (*StaticVideoTrack, error) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	playCtx, playCancel := context.WithCancel(context.Background())
 
 	return &StaticVideoTrack{
-		track:    track,
-		ctx:      ctx,
-		cancel:   cancel,
-		frameDur: time.Millisecond * 33,
+		track:      track,
+		ctx:        ctx,
+		cancel:     cancel,
+		playCtx:    playCtx,
+		playCancel: playCancel,
+		frameDur:   time.Millisecond * 33,
 	}, nil
 }
 
@@ -81,20 +87,20 @@ func (vt *StaticVideoTrack) LoadVideo(filePath string) error {
 
 func (vt *StaticVideoTrack) Play(isLoop bool) {
 	vt.mu.Lock()
-	if vt.playing {
-		vt.mu.Unlock()
-		return
-	}
+	defer vt.mu.Unlock()
 	vt.playing = true
-	vt.mu.Unlock()
-
+	vt.playCtx, vt.playCancel = context.WithCancel(vt.ctx)
+	vt.playWait.Add(1)
 	go vt.playLoop(isLoop)
 }
 
 func (vt *StaticVideoTrack) Pause() {
 	vt.mu.Lock()
+	defer vt.mu.Unlock()
 	vt.playing = false
-	vt.mu.Unlock()
+	vt.playCancel()
+	vt.playCancel = nil
+	vt.playWait.Wait()
 }
 
 func (vt *StaticVideoTrack) Seek(position time.Duration) error {
@@ -158,12 +164,17 @@ func (vt *StaticVideoTrack) GetPosition() time.Duration {
 }
 
 func (vt *StaticVideoTrack) playLoop(isLoop bool) {
+	defer vt.playWait.Done()
 	ticker := time.NewTicker(vt.frameDur)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-vt.ctx.Done():
+			return
+		case <-vt.playCtx.Done():
+			log.Printf("Video playback stopped %s", vt.currentPos.String())
+			vt.playing = false
 			return
 		case <-ticker.C:
 			vt.mu.Lock()
@@ -218,10 +229,13 @@ func (vt *StaticVideoTrack) playLoop(isLoop bool) {
 }
 
 func (vt *StaticVideoTrack) Close() error {
-	vt.cancel()
 	vt.mu.Lock()
 	defer vt.mu.Unlock()
-
+	vt.cancel()
+	if vt.playCancel != nil {
+		vt.playCancel()
+		vt.playCancel = nil
+	}
 	vt.playing = false
 
 	if vt.file != nil {
