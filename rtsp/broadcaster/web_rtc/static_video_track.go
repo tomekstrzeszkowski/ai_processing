@@ -95,6 +95,9 @@ func (vt *StaticVideoTrack) Play(isLoop bool) {
 }
 
 func (vt *StaticVideoTrack) Pause() {
+	if vt == nil {
+		log.Printf("Null!!")
+	}
 	vt.mu.Lock()
 	defer vt.mu.Unlock()
 	vt.playing = false

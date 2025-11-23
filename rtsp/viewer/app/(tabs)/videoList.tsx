@@ -4,7 +4,7 @@ import { useP2p } from "@/app/p2pProvider";
 import { useProtocol } from "@/app/protocolProvider";
 import { useWebRtc } from "@/app/webRtcProvider";
 import { LiveVideoPlayer } from "@/components/LiveVideoPlayer";
-import { formatBytes } from "@/helpers/verbose";
+import { formatBytes } from "@/helpers/formatters";
 import { useIsFocused } from "@react-navigation/native";
 import React, { useEffect, useRef, useState } from "react";
 import { Button, Dimensions, ScrollView, StyleSheet, View } from "react-native";
@@ -40,6 +40,7 @@ export default function videoList() {
   const [endDate, setEndDate] = useState(
     new Date().toISOString().split("T")[0],
   );
+  const [seek, setSeek] = useState<number>(0);
 
   useEffect(() => {
     return () => {
@@ -65,6 +66,11 @@ export default function videoList() {
     }
     if (items.length === 0) {
       fetchVideoList(startDate, endDate);
+    }
+    if (isConnected && isWebRtc) {
+      offereeRef.current.registerOrSkipDataChannelListener("seek", function ({seek}) {
+        setSeek(seek);
+      });
     }
   }, [isFocused]);
 
@@ -175,7 +181,14 @@ export default function videoList() {
               />
             )}
             {isWebRtc && (
-              <LiveVideoPlayer stream={stream} isConnected={isConnected} handleSeek={handleSeek}/>
+              <LiveVideoPlayer
+                stream={stream}
+                isConnected={isConnected}
+                isLive={false}
+                handleSeek={handleSeek}
+                seekValue={seek}
+                seekMax={6}
+              />
             )}
           </View>
         </ScrollView>

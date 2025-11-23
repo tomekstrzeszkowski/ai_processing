@@ -23,7 +23,7 @@ export default function app() {
             marginBottom: "auto"
           }}
         >
-          <LiveVideoPlayer stream={stream} isConnected={isConnected} />
+          <LiveVideoPlayer stream={stream} isConnected={isConnected} isLive={true} />
           {lastFrameTime && (
             <View
               style={{

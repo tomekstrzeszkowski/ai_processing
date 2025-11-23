@@ -21,3 +21,8 @@ type VideoListMessage struct {
 	Type      string        `json:"type"`
 	VideoList []video.Video `json:"videoList"`
 }
+
+type SeekMessage struct {
+	Type string  `json:"type"`
+	Seek float64 `json:"seek"`
+}

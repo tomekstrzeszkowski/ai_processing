@@ -1,4 +1,5 @@
 import { useProtocol } from '@/app/protocolProvider';
+import { formatTime } from '@/helpers/formatters';
 import Hls from 'hls.js';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
@@ -8,13 +9,18 @@ interface LiveVideoPlayerProps {
   isConnected: boolean;
   stream: MediaStream|string|null;
   handleSeek?: Function;
+  isLive?: boolean;
+  seekMax?: number,
+  seekValue?: number,
 }
 const hls = new Hls({
   enableWorker: true,
   lowLatencyMode: true,
 });
 
-export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({isConnected, stream, handleSeek = () => {}}) => {
+export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
+  isConnected, stream, isLive, handleSeek = () => {}, seekMax=120, seekValue=0
+}) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const { p2pPlayer } = useProtocol();
     const [isShowMenu, setIsShowMenu] = useState<boolean>(false);
@@ -70,7 +76,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({isConnected, st
         onHoverOut={() => setIsShowMenu(false)}
       >
       {(stream instanceof MediaStream || (stream && p2pPlayer === 'hls')) && <video 
-          style={{ display: isConnected ? "flex": "none", margin:"1px" }}
+          style={{ display: isConnected ? "flex": "none", margin:"0" }}
           ref={videoRef}
           autoPlay 
           playsInline
@@ -118,17 +124,14 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({isConnected, st
           bottom: 0,
           left: 0,
           right: 0,
-          flexDirection: "column",
-          justifyContent: "center",
-          alignItems: "center",
           padding: 30,
-          background: 'linear-gradient(transparent, rgba(0, 0, 0, 1))',
+          background: 'linear-gradient(transparent, #1a1a1a)',
         }}>
-          <input
+          {!isLive && <input
             type="range"
             min="0"
-            max={30}
-            value={1}
+            max={seekMax}
+            value={seekValue}
             onChange={(e) => handleSeek(e)}
             style={{
               width: '100%',
@@ -136,21 +139,30 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({isConnected, st
               cursor: 'pointer',
               accentColor: '#e53e3e',
             }}
-          />
+          />}
           <View
             style={{
               display: 'flex',
               flexDirection: 'row',
               justifyContent: 'space-between',
-              marginTop: 4,
+              marginTop: 15,
             }}
           >
-            <Text style={{ color: '#fff', fontSize: 12 }}>
-              1313
-            </Text>
-            <Text style={{ color: '#fff', fontSize: 12 }}>
-              3333
-            </Text>
+            {isLive && <View style={{ flexDirection: 'row'}}>
+              <Text style={{ color: '#ff0000ff', fontSize: 12 }}>
+                {isConnected ? "🔴" : "🔘"}
+              </Text>
+            </View>}
+
+            {!isLive && <View style={{ flexDirection: 'row'}}>
+              <Text style={{ color: 'white', fontSize: 12 }}>
+                {formatTime(seekValue)}
+              </Text>
+              <Text style={{ color: '#fff', fontSize: 12, fontWeight: 900}}>&nbsp;/&nbsp;</Text>
+              <Text style={{ color: '#b9b9b9ff', fontSize: 12 }}>
+                {formatTime(seekMax)}
+              </Text>
+            </View>}
           </View>
         </View>}
       </Pressable>

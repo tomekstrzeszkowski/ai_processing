@@ -1,6 +1,7 @@
 package web_rtc
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -126,15 +127,16 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 	if err != nil {
 		return nil, err
 	}
+	seekContext, seekCancel := context.WithCancel(context.Background())
 	dataChannel.OnOpen(func() {
-		fmt.Println("Data channel opened")
-		dataChannel.SendText("hello from server")
+		log.Println("Data channel opened")
 		// reset offert so it can't be reused
 		o.SendFlushMessageToSignaling()
 	})
 	dataChannel.OnClose(func() {
-		fmt.Println("Data channel closed")
-		o.staticVideoTrack.Pause()
+		log.Println("Data channel closed")
+		//o.staticVideoTrack.Pause()
+		seekCancel()
 	})
 	dataChannel.OnMessage(func(dataChannelMessage webrtc.DataChannelMessage) {
 		//fmt.Printf("Message from data channel: %s\n", string(dataChannelMessage.Data))
@@ -213,6 +215,11 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 				}
 				o.staticVideoTrack.Play(false)
 			}
+			if seekCancel != nil {
+				seekCancel()
+			}
+			seekContext, seekCancel = context.WithCancel(context.Background())
+			go updateSeek(seekContext, dataChannel, o.staticVideoTrack)
 		case "answer":
 			answer := webrtc.SessionDescription{
 				Type: webrtc.SDPTypeAnswer,
@@ -222,7 +229,18 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 				log.Printf("Error setting remote description: %v", err)
 			}
 		case "seek":
+			if o.staticVideoTrack == nil {
+				log.Println("NULL!")
+			}
 			o.staticVideoTrack.Seek(time.Duration(message.Seek) * time.Second)
+			if !o.staticVideoTrack.playing {
+				o.staticVideoTrack.Play(false)
+			}
+			if seekCancel != nil {
+				seekCancel()
+			}
+			seekContext, seekCancel = context.WithCancel(context.Background())
+			go updateSeek(seekContext, dataChannel, o.staticVideoTrack)
 		}
 
 	})
