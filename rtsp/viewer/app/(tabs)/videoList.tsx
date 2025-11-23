@@ -109,12 +109,6 @@ export default function videoList() {
       scrollToVideoPlayer();
     }, 100);
   };
-  async function seek() {
-    if (!isWebRtc) return;
-    await offereeRef.current.dataChannel?.send(
-      JSON.stringify({ type: "seek", seek: 30 }),
-    );
-  }
 
   const renderVideoItem = (item: any, index: number) => (
     <View key={index} style={styles.gridItem}>
@@ -128,6 +122,14 @@ export default function videoList() {
     </View>
   );
 
+
+  async function handleSeek(event: React.ChangeEvent<HTMLInputElement>) {
+    const seek = Number(event.target.value);
+    if (!isWebRtc) return;
+    await offereeRef.current.dataChannel?.send(
+      JSON.stringify({ type: "seek", seek }),
+    );
+  }
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
@@ -159,11 +161,6 @@ export default function videoList() {
                 min={startDate}
                 style={{ display: "block" }}
               />
-              <Button
-                title="SEEK"
-                color="#ee8700ff"
-                onPress={() => seek()}
-              />
             </View>
           </View>
           <View style={styles.gridContainer}>
@@ -178,7 +175,7 @@ export default function videoList() {
               />
             )}
             {isWebRtc && (
-              <LiveVideoPlayer stream={stream} isConnected={isConnected} />
+              <LiveVideoPlayer stream={stream} isConnected={isConnected} handleSeek={handleSeek}/>
             )}
           </View>
         </ScrollView>

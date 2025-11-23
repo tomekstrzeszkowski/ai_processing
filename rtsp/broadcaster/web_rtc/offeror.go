@@ -134,6 +134,7 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 	})
 	dataChannel.OnClose(func() {
 		fmt.Println("Data channel closed")
+		o.staticVideoTrack.Pause()
 	})
 	dataChannel.OnMessage(func(dataChannelMessage webrtc.DataChannelMessage) {
 		//fmt.Printf("Message from data channel: %s\n", string(dataChannelMessage.Data))

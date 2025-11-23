@@ -1,21 +1,23 @@
 import { useProtocol } from '@/app/protocolProvider';
 import Hls from 'hls.js';
-import { useEffect, useRef } from 'react';
-import { Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
 
 
 interface LiveVideoPlayerProps {
   isConnected: boolean;
   stream: MediaStream|string|null;
+  handleSeek?: Function;
 }
 const hls = new Hls({
-enableWorker: true,
-lowLatencyMode: true,
+  enableWorker: true,
+  lowLatencyMode: true,
 });
 
-export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({isConnected, stream}) => {
+export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({isConnected, stream, handleSeek = () => {}}) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const { p2pPlayer } = useProtocol();
+    const [isShowMenu, setIsShowMenu] = useState<boolean>(false);
     
     useEffect(() => {
       if (!videoRef.current || !stream) {
@@ -55,23 +57,23 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({isConnected, st
         hls.startLoad();
       }
       
-    }, [isConnected])
+    }, [isConnected]);
 
   return (
     <View style={{
-      display: "flex", 
-      flex: 1,
-      flexDirection: "column" ,
-      justifyContent: "center",
-      alignItems: "center"
-    }}>
+        display: "flex", 
+        flex: 1,
+      }}
+    >
+      <Pressable
+        onHoverIn={() => setIsShowMenu(true)}
+        onHoverOut={() => setIsShowMenu(false)}
+      >
       {(stream instanceof MediaStream || (stream && p2pPlayer === 'hls')) && <video 
-          controls
-          style={{ display: isConnected ? "flex": "none", margin:"auto" }}
+          style={{ display: isConnected ? "flex": "none", margin:"1px" }}
           ref={videoRef}
           autoPlay 
           playsInline
-      
       />}
       {stream && p2pPlayer === 'image' && <img 
           src={stream as string}
@@ -87,6 +89,8 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({isConnected, st
           overflow: 'hidden',
           justifyContent: 'center',
           alignItems: 'center',
+          minWidth: 300,
+          minHeight: 800,
         }}>
           <View style={{
             position: 'absolute',
@@ -108,6 +112,48 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({isConnected, st
           </View>
         </View>
       )}
+      {(stream instanceof MediaStream || (stream && p2pPlayer === 'hls')) && <View style={{
+          display: isShowMenu ? "flex" : "none", 
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          flexDirection: "column",
+          justifyContent: "center",
+          alignItems: "center",
+          padding: 30,
+          background: 'linear-gradient(transparent, rgba(0, 0, 0, 1))',
+        }}>
+          <input
+            type="range"
+            min="0"
+            max={30}
+            value={1}
+            onChange={(e) => handleSeek(e)}
+            style={{
+              width: '100%',
+              height: 6,
+              cursor: 'pointer',
+              accentColor: '#e53e3e',
+            }}
+          />
+          <View
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              marginTop: 4,
+            }}
+          >
+            <Text style={{ color: '#fff', fontSize: 12 }}>
+              1313
+            </Text>
+            <Text style={{ color: '#fff', fontSize: 12 }}>
+              3333
+            </Text>
+          </View>
+        </View>}
+      </Pressable>
     </View>
   );
 }

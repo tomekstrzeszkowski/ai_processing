@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export function NavigationListener() {
   const pathname = usePathname();
   const segments = useSegments();
-  const { isWebRtc, p2pPlayer, setStream, isConnected, isConnecting, host, setProtocol, protocol } =
+  const { isWebRtc, p2pPlayer, setStream, isConnected, isConnecting, host, setProtocol, protocol, setIsConnecting } =
     useProtocol();
   const { handlePlayRef: p2pHandlePlayRef, handleStopRef: p2pHandleStopRef } =
     useP2p();
@@ -32,7 +32,7 @@ export function NavigationListener() {
   }, [isConnected]);
 
   const attemptConnection = useCallback(() => {
-      console.log(`Attempting ${protocol} connection...`);
+    console.log(`Attempting ${protocol} connection...`);
     if (isWebRtc) {
       if (isConnected || isConnecting) return;
       webrtcHandlePlayRef.current?.((stream: MediaStream) => {
@@ -114,7 +114,6 @@ export function NavigationListener() {
         }
       }
     }
-
     connectionWorkflow();
 
     return () => {

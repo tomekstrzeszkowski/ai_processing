@@ -19,6 +19,8 @@ export default function app() {
         <View
           style={{
             flex: 30,
+            marginTop: "auto",
+            marginBottom: "auto"
           }}
         >
           <LiveVideoPlayer stream={stream} isConnected={isConnected} />
