@@ -1,5 +1,4 @@
 import { useProtocol } from "@/app/protocolProvider";
-import { useToast } from "@/app/toastProvider";
 import { SignalingMessage } from "@/helpers/message";
 import { WebSocketSignalingClient } from "@/helpers/signaling";
 import { WebRtcOfferee } from "@/helpers/webRtc";
@@ -120,7 +119,11 @@ export const WebRtcProvider = ({ children }: { children: React.ReactNode }) => {
     };
     handleStopRef.current = () => {
       if (offereeRef.current.dataChannel) {
-        signalingClient.ws?.send(JSON.stringify({ type: "disconnected" }));
+        try {
+          signalingClient.ws?.send(JSON.stringify({ type: "disconnected" }));
+        } catch (e) {
+          console.error(e)
+        }
         offereeRef.current.dataChannel.send(JSON.stringify({ type: "close" }));
       }
       signalingClient.disconnect();

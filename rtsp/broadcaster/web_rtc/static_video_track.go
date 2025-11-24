@@ -176,16 +176,10 @@ func (vt *StaticVideoTrack) playLoop(isLoop bool) {
 		case <-vt.ctx.Done():
 			return
 		case <-vt.playCtx.Done():
-			log.Printf("Video playback stopped %s", vt.currentPos.String())
 			vt.playing = false
 			return
 		case <-ticker.C:
 			vt.mu.Lock()
-
-			if !vt.playing {
-				vt.mu.Unlock()
-				return
-			}
 
 			if vt.reader == nil {
 				vt.mu.Unlock()

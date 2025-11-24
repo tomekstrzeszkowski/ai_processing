@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -49,9 +50,11 @@ type Offeror struct {
 	videoTrack       *VideoTrack
 	staticVideoTrack *StaticVideoTrack
 	savedVideoPath   string
+	trackMutex       sync.Mutex
 }
 
 func NewOfferor(wsClient *websocket.Conn, savedVideoPath string) (Offeror, error) {
+	log.Print("New offeror")
 	return Offeror{wsClient: wsClient, savedVideoPath: savedVideoPath, staticVideoTrack: nil}, nil
 }
 
@@ -72,6 +75,7 @@ func (o *Offeror) CreatePeerConnection(videoTrack *VideoTrack) (*webrtc.PeerConn
 }
 
 func (o *Offeror) Close() {
+	fmt.Print("CLOSING offeror!!")
 	o.staticVideoTrack = nil
 	o.pc.Close()
 }
@@ -89,7 +93,10 @@ func (o *Offeror) HandlePeerConnection() {
 		fmt.Printf("Connection state: %s\n", state.String())
 		switch state {
 		case webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateDisconnected:
+			o.trackMutex.Lock()
+			log.Print("Removing static video track on connection state")
 			o.staticVideoTrack = nil
+			o.trackMutex.Unlock()
 			connectionState, _ := json.Marshal(map[string]string{"type": "failed"})
 			if err := o.wsClient.WriteMessage(websocket.TextMessage, connectionState); err != nil {
 				log.Fatal(err)
@@ -118,6 +125,7 @@ func (o *Offeror) SendFlushMessageToSignaling() {
 }
 
 func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
+	log.Printf("=== CreateDataChannel CALLED ===")
 	ordered := false
 	maxRetransmits := uint16(0)
 	dataChannel, err := o.pc.CreateDataChannel(connection.WebRtcDataChannel, &webrtc.DataChannelInit{
@@ -136,8 +144,9 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 	dataChannel.OnClose(func() {
 		log.Println("Data channel closed")
 		//o.staticVideoTrack.Pause()
-		seekCancel()
+		// seekCancel()
 	})
+	created := 0
 	dataChannel.OnMessage(func(dataChannelMessage webrtc.DataChannelMessage) {
 		//fmt.Printf("Message from data channel: %s\n", string(dataChannelMessage.Data))
 		var message DataChannelMessage
@@ -149,6 +158,7 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 		case "close":
 			// is it needed?
 			//recreate offer
+			fmt.Print("GOT close message")
 			offer, err := o.pc.CreateOffer(nil)
 			if err != nil {
 				log.Fatal(err)
@@ -177,29 +187,39 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 		case "video":
 			filePath := filepath.Join(o.savedVideoPath, message.VideoName)
 
+			o.trackMutex.Lock()
 			if o.staticVideoTrack == nil {
 				fmt.Printf(("New static video track %s\n"), filePath)
+				created += 1
+				if created == 2 {
+					log.Print("this is strage")
+					panic("should not happend")
+				}
 				staticVideoTrack, err := NewStaticVideoTrack()
 				if err != nil {
 					log.Printf("Error creating static video track: %v", err)
+					o.trackMutex.Unlock()
 					return
 				}
 				o.staticVideoTrack = staticVideoTrack
 
 				if err := staticVideoTrack.LoadVideo(filePath); err != nil {
 					log.Printf("Error loading video: %v", err)
+					o.trackMutex.Unlock()
 					return
 				}
 
 				rtpSender, err := o.pc.AddTrack(staticVideoTrack.track)
 				if err != nil {
 					log.Printf("Error adding track: %v", err)
+					o.trackMutex.Unlock()
 					return
 				}
 
 				staticVideoTrack.rtpSender = rtpSender
 				o.startRTCPReader(rtpSender)
 				staticVideoTrack.Play(true)
+				o.trackMutex.Unlock()
 				offer, err := o.PrepareOffer()
 				if err != nil {
 					log.Printf("Error preparing offer: %v", err)
@@ -211,9 +231,11 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 				o.staticVideoTrack.Pause()
 				if err := o.staticVideoTrack.LoadVideo(filePath); err != nil {
 					log.Printf("Error loading video: %v", err)
+					o.trackMutex.Unlock()
 					return
 				}
 				o.staticVideoTrack.Play(false)
+				o.trackMutex.Unlock()
 			}
 			if seekCancel != nil {
 				seekCancel()
