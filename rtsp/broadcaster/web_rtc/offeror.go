@@ -125,7 +125,6 @@ func (o *Offeror) SendFlushMessageToSignaling() {
 }
 
 func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
-	log.Printf("=== CreateDataChannel CALLED ===")
 	ordered := false
 	maxRetransmits := uint16(0)
 	dataChannel, err := o.pc.CreateDataChannel(connection.WebRtcDataChannel, &webrtc.DataChannelInit{
@@ -146,7 +145,6 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 		//o.staticVideoTrack.Pause()
 		// seekCancel()
 	})
-	created := 0
 	dataChannel.OnMessage(func(dataChannelMessage webrtc.DataChannelMessage) {
 		//fmt.Printf("Message from data channel: %s\n", string(dataChannelMessage.Data))
 		var message DataChannelMessage
@@ -190,11 +188,6 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 			o.trackMutex.Lock()
 			if o.staticVideoTrack == nil {
 				fmt.Printf(("New static video track %s\n"), filePath)
-				created += 1
-				if created == 2 {
-					log.Print("this is strage")
-					panic("should not happend")
-				}
 				staticVideoTrack, err := NewStaticVideoTrack()
 				if err != nil {
 					log.Printf("Error creating static video track: %v", err)

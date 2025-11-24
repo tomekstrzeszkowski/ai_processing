@@ -92,9 +92,9 @@ func GetVideoByDateRange(path string, start time.Time, end time.Time) ([]Video, 
 		dateB, _ := time.Parse("2006-01-02", matchB)
 		if dateA.Equal(dateB) {
 			// For same date, sort by filename (which includes the number suffix)
-			return videoList[i].Name > videoList[j].Name
+			return videoList[i].Name < videoList[j].Name
 		}
-		return dateA.After(dateB)
+		return dateB.After(dateA)
 	})
 
 	return videoList, nil
