@@ -3,7 +3,6 @@ package web_rtc
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"time"
 
 	"github.com/pion/webrtc/v3"
@@ -21,7 +20,7 @@ func updateSeek(ctx context.Context, dataChannel *webrtc.DataChannel, staticVide
 				continue
 			}
 			if seekMessage, err := json.Marshal(SeekMessage{Type: "seek", Seek: staticVideoTrack.currentPos.Seconds()}); err == nil {
-				log.Printf("Sending %s is playing %b", seekMessage, staticVideoTrack.playing)
+				//log.Printf("Sending %s is playing %b", seekMessage, staticVideoTrack.playing)
 				dataChannel.Send(seekMessage)
 				if !staticVideoTrack.playing {
 					return

@@ -1,5 +1,6 @@
 import { useProtocol } from '@/app/protocolProvider';
 import { formatTime } from '@/helpers/formatters';
+import Slider from '@react-native-community/slider';
 import Hls from 'hls.js';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
@@ -127,19 +128,17 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
           padding: 30,
           background: 'linear-gradient(transparent, #1a1a1a)',
         }}>
-          {!isLive && <input
-            type="range"
-            min="0"
-            max={seekMax}
+          {!isLive && <Slider
+            style={{width: "100%", height: 40}}
+            minimumValue={0}
+            maximumValue={seekMax}
             value={seekValue}
-            onChange={(e) => handleSeek(e)}
-            style={{
-              width: '100%',
-              height: 6,
-              cursor: 'pointer',
-              accentColor: '#e53e3e',
-            }}
+            minimumTrackTintColor="#e53e3e"
+            maximumTrackTintColor="#ffffff8a"
+            thumbTintColor="#e53e3e"
+            onSlidingComplete={(seek) => handleSeek(seek)}
           />}
+
           <View
             style={{
               display: 'flex',

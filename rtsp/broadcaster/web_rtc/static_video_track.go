@@ -186,7 +186,7 @@ func (vt *StaticVideoTrack) playLoop(isLoop bool) {
 			nal, err := vt.reader.NextNAL()
 			if err != nil {
 				if err == io.EOF {
-					log.Printf("Video playback finished (EOF) %s", vt.currentPos.String())
+					log.Printf("Video playback finished (EOF) %s loop: %b", vt.currentPos.String(), isLoop)
 					if isLoop {
 						vt.file.Seek(0, io.SeekStart)
 						reader, _ := h264reader.NewReader(vt.file)

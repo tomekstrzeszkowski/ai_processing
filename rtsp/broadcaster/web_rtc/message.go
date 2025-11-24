@@ -9,12 +9,12 @@ type SignalingMessage struct {
 }
 
 type DataChannelMessage struct {
-	Type      string `json:"type"`
-	StartDate string `json:"startDate,omitempty"`
-	EndDate   string `json:"endDate,omitempty"`
-	VideoName string `json:"videoName,omitempty"`
-	Seek      int    `json:"seek,omitempty"`
-	Sdp       string `json:"sdp,omitempty"`
+	Type      string  `json:"type"`
+	StartDate string  `json:"startDate,omitempty"`
+	EndDate   string  `json:"endDate,omitempty"`
+	VideoName string  `json:"videoName,omitempty"`
+	Seek      float64 `json:"seek,omitempty"`
+	Sdp       string  `json:"sdp,omitempty"`
 }
 
 type VideoListMessage struct {

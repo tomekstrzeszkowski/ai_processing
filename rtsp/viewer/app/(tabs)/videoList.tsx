@@ -68,7 +68,7 @@ export default function videoList() {
       fetchVideoList(startDate, endDate);
     }
     if (isConnected && isWebRtc) {
-      offereeRef.current.registerOrSkipDataChannelListener("seek", function ({seek}) {
+      offereeRef.current.registerOrSkipDataChannelListener("seek", function ({seek} : {seek: number}) {
         setSeek(seek);
       });
     }
@@ -129,8 +129,7 @@ export default function videoList() {
   );
 
 
-  async function handleSeek(event: React.ChangeEvent<HTMLInputElement>) {
-    const seek = Number(event.target.value);
+  async function handleSeek(seek: number) {
     if (!isWebRtc) return;
     await offereeRef.current.dataChannel?.send(
       JSON.stringify({ type: "seek", seek }),

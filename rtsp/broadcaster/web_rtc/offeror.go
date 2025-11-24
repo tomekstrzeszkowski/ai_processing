@@ -93,14 +93,16 @@ func (o *Offeror) HandlePeerConnection() {
 		fmt.Printf("Connection state: %s\n", state.String())
 		switch state {
 		case webrtc.PeerConnectionStateFailed, webrtc.PeerConnectionStateDisconnected:
-			o.trackMutex.Lock()
-			log.Print("Removing static video track on connection state")
-			o.staticVideoTrack = nil
-			o.trackMutex.Unlock()
-			connectionState, _ := json.Marshal(map[string]string{"type": "failed"})
-			if err := o.wsClient.WriteMessage(websocket.TextMessage, connectionState); err != nil {
-				log.Fatal(err)
-			}
+			// don't do anything for now
+			// o.trackMutex.Lock()
+			// log.Print("Removing static video track on connection state")
+			// o.staticVideoTrack.Close()
+			// o.staticVideoTrack = nil
+			// o.trackMutex.Unlock()
+			// connectionState, _ := json.Marshal(map[string]string{"type": "failed"})
+			// if err := o.wsClient.WriteMessage(websocket.TextMessage, connectionState); err != nil {
+			// 	log.Fatal(err)
+			// }
 		}
 	})
 	o.pc.OnNegotiationNeeded(func() {
@@ -244,13 +246,16 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 				log.Printf("Error setting remote description: %v", err)
 			}
 		case "seek":
+			o.trackMutex.Lock()
 			if o.staticVideoTrack == nil {
 				log.Println("NULL!")
+				return
 			}
 			o.staticVideoTrack.Seek(time.Duration(message.Seek) * time.Second)
 			if !o.staticVideoTrack.playing {
 				o.staticVideoTrack.Play(false)
 			}
+			o.trackMutex.Unlock()
 			if seekCancel != nil {
 				seekCancel()
 			}
