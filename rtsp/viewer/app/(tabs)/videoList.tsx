@@ -135,6 +135,18 @@ export default function videoList() {
       JSON.stringify({ type: "seek", seek }),
     );
   }
+  async function handlePause() {
+    if (!isWebRtc) return;
+    await offereeRef.current.dataChannel?.send(
+      JSON.stringify({ type: "pause" }),
+    );
+  }
+  async function handlePlay() {
+    if (!isWebRtc) return;
+    await offereeRef.current.dataChannel?.send(
+      JSON.stringify({ type: "resume" }),
+    );
+  }
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.container}>
@@ -184,9 +196,11 @@ export default function videoList() {
                 stream={stream}
                 isConnected={isConnected}
                 isLive={false}
-                handleSeek={handleSeek}
                 seekValue={seek}
                 seekMax={6}
+                handleSeek={handleSeek}
+                handlePause={handlePause}
+                handlePlay={handlePlay}
               />
             )}
           </View>

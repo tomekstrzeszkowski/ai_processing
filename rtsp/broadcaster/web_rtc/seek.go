@@ -19,13 +19,20 @@ func updateSeek(ctx context.Context, dataChannel *webrtc.DataChannel, staticVide
 			if dataChannel == nil || staticVideoTrack == nil {
 				continue
 			}
-			if seekMessage, err := json.Marshal(SeekMessage{Type: "seek", Seek: staticVideoTrack.currentPos.Seconds()}); err == nil {
+			if err := SendSeekPosition(staticVideoTrack.currentPos.Seconds(), dataChannel); err == nil {
 				//log.Printf("Sending %s is playing %b", seekMessage, staticVideoTrack.playing)
-				dataChannel.Send(seekMessage)
 				if !staticVideoTrack.playing {
 					return
 				}
 			}
 		}
 	}
+}
+
+func SendSeekPosition(position float64, dataChannel *webrtc.DataChannel) error {
+	seekMessage, err := json.Marshal(SeekMessage{Type: "seek", Seek: position})
+	if err == nil {
+		dataChannel.Send(seekMessage)
+	}
+	return err
 }

@@ -3,16 +3,18 @@ import { formatTime } from '@/helpers/formatters';
 import Slider from '@react-native-community/slider';
 import Hls from 'hls.js';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, TouchableOpacity, View } from 'react-native';
 
 
 interface LiveVideoPlayerProps {
   isConnected: boolean;
   stream: MediaStream|string|null;
-  handleSeek?: Function;
   isLive?: boolean;
-  seekMax?: number,
-  seekValue?: number,
+  seekMax?: number;
+  seekValue?: number;
+  handleSeek?: Function;
+  handlePause?: Function;
+  handlePlay?: Function;
 }
 const hls = new Hls({
   enableWorker: true,
@@ -20,11 +22,22 @@ const hls = new Hls({
 });
 
 export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
-  isConnected, stream, isLive, handleSeek = () => {}, seekMax=120, seekValue=0
+  isConnected, 
+  stream, 
+  isLive, 
+  seekMax=120, 
+  seekValue=0, 
+  handleSeek = () => {},
+  handlePause = () => {},  
+  handlePlay =() => {}, 
+  handleStop = () => {}, 
+  handleLoop = () => {}, 
+  handleFrame = (isForward: boolean) => {}
 }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const { p2pPlayer } = useProtocol();
     const [isShowMenu, setIsShowMenu] = useState<boolean>(false);
+    const [isPlaying, setIsPlaying] = useState<boolean>(false);
     
     useEffect(() => {
       if (!videoRef.current || !stream) {
@@ -65,6 +78,29 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
       }
       
     }, [isConnected]);
+
+    function play() {
+      setIsPlaying(true)
+      handlePlay();
+    }
+
+    function pause() {
+      setIsPlaying(false)
+      handlePause();
+    }
+
+    function stop() {
+
+    }
+
+    function loop() {
+
+    }
+
+    function frame(isForward = true) {
+
+    }
+
 
   return (
     <View style={{
@@ -147,12 +183,30 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
               marginTop: 15,
             }}
           >
+            {!isPlaying && <TouchableOpacity onPress={play}>
+              <Text style={{ color: "white", fontSize: 12 }}>
+                ▶︎
+              </Text>
+            </TouchableOpacity>}
+            {isPlaying && <TouchableOpacity onPress={pause}>
+              <Text style={{ color: "white", fontSize: 12 }}>
+                ⏸
+              </Text>
+            </TouchableOpacity>}
             {isLive && <View style={{ flexDirection: 'row'}}>
               <Text style={{ color: '#ff0000ff', fontSize: 12 }}>
                 {isConnected ? "🔴" : "🔘"}
               </Text>
             </View>}
-
+            <View
+              style={{
+                flexDirection: "row",
+              }}
+            >
+              <Text style={{ color: "white", fontSize: 12 }}>
+                ⏮
+              </Text>
+            </View>
             {!isLive && <View style={{ flexDirection: 'row'}}>
               <Text style={{ color: 'white', fontSize: 12 }}>
                 {formatTime(seekValue)}
@@ -162,6 +216,34 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
                 {formatTime(seekMax)}
               </Text>
             </View>}
+            <View
+              style={{
+                flexDirection: "row",
+              }}
+            >
+              <Text style={{ color: "white", fontSize: 12 }}>
+                ⏭
+              </Text>
+            </View>
+            {!isLive && (
+              <View
+                style={{
+                  marginLeft: 10,
+                  marginRight: 10,
+                }}
+              >
+                <Text style={{ color: "white", fontSize: 16 }}>↻</Text>
+              </View>
+            )}
+            <TouchableOpacity
+              style={{
+                marginLeft: 10,
+                marginRight: 10,
+              }}
+              onPress={() => videoRef.current!.requestFullscreen()}
+            >
+              <Text style={{ color: "white", fontSize: 16 }}>⌞ ⌝</Text>
+            </TouchableOpacity>
           </View>
         </View>}
       </Pressable>

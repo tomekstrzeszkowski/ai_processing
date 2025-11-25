@@ -29,6 +29,7 @@ type StaticVideoTrack struct {
 	frameCount int64
 	rtpSender  *webrtc.RTPSender
 	playWait   sync.WaitGroup
+	isLoop     bool
 }
 
 func NewStaticVideoTrack() (*StaticVideoTrack, error) {
@@ -51,6 +52,7 @@ func NewStaticVideoTrack() (*StaticVideoTrack, error) {
 		playCtx:    playCtx,
 		playCancel: playCancel,
 		frameDur:   time.Millisecond * 33,
+		isLoop:     false,
 	}, nil
 }
 
@@ -85,13 +87,13 @@ func (vt *StaticVideoTrack) LoadVideo(filePath string) error {
 	return nil
 }
 
-func (vt *StaticVideoTrack) Play(isLoop bool) {
+func (vt *StaticVideoTrack) Play() {
 	vt.mu.Lock()
 	defer vt.mu.Unlock()
 	vt.playing = true
 	vt.playCtx, vt.playCancel = context.WithCancel(vt.ctx)
 	vt.playWait.Add(1)
-	go vt.playLoop(isLoop)
+	go vt.playInBackground()
 }
 
 func (vt *StaticVideoTrack) Pause() {
@@ -163,7 +165,7 @@ func (vt *StaticVideoTrack) GetPosition() time.Duration {
 	return vt.currentPos
 }
 
-func (vt *StaticVideoTrack) playLoop(isLoop bool) {
+func (vt *StaticVideoTrack) playInBackground() {
 	defer vt.playWait.Done()
 	ticker := time.NewTicker(vt.frameDur)
 	defer ticker.Stop()
@@ -186,8 +188,8 @@ func (vt *StaticVideoTrack) playLoop(isLoop bool) {
 			nal, err := vt.reader.NextNAL()
 			if err != nil {
 				if err == io.EOF {
-					log.Printf("Video playback finished (EOF) %s loop: %b", vt.currentPos.String(), isLoop)
-					if isLoop {
+					log.Printf("Video playback finished (EOF) %s loop: %b", vt.currentPos.String(), vt.isLoop)
+					if vt.isLoop {
 						vt.file.Seek(0, io.SeekStart)
 						reader, _ := h264reader.NewReader(vt.file)
 						vt.reader = reader

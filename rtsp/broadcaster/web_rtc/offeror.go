@@ -196,6 +196,7 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 					o.trackMutex.Unlock()
 					return
 				}
+				staticVideoTrack.isLoop = true
 				o.staticVideoTrack = staticVideoTrack
 
 				if err := staticVideoTrack.LoadVideo(filePath); err != nil {
@@ -213,7 +214,7 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 
 				staticVideoTrack.rtpSender = rtpSender
 				o.startRTCPReader(rtpSender)
-				staticVideoTrack.Play(true)
+				staticVideoTrack.Play()
 				o.trackMutex.Unlock()
 				offer, err := o.PrepareOffer()
 				if err != nil {
@@ -229,7 +230,8 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 					o.trackMutex.Unlock()
 					return
 				}
-				o.staticVideoTrack.Play(false)
+				o.staticVideoTrack.isLoop = false
+				o.staticVideoTrack.Play()
 				o.trackMutex.Unlock()
 			}
 			if seekCancel != nil {
@@ -248,12 +250,11 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 		case "seek":
 			o.trackMutex.Lock()
 			if o.staticVideoTrack == nil {
-				log.Println("NULL!")
 				return
 			}
 			o.staticVideoTrack.Seek(time.Duration(message.Seek) * time.Second)
 			if !o.staticVideoTrack.playing {
-				o.staticVideoTrack.Play(false)
+				o.staticVideoTrack.Play()
 			}
 			o.trackMutex.Unlock()
 			if seekCancel != nil {
@@ -261,6 +262,38 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 			}
 			seekContext, seekCancel = context.WithCancel(context.Background())
 			go updateSeek(seekContext, dataChannel, o.staticVideoTrack)
+		case "pause":
+			log.Printf("handle pause")
+			o.trackMutex.Lock()
+			o.staticVideoTrack.Pause()
+			o.trackMutex.Unlock()
+			SendSeekPosition(o.staticVideoTrack.currentPos.Seconds(), dataChannel)
+		case "resume":
+			log.Printf("resume")
+			o.trackMutex.Lock()
+			o.staticVideoTrack.Play()
+			o.trackMutex.Unlock()
+			seekContext, seekCancel = context.WithCancel(context.Background())
+			go updateSeek(seekContext, dataChannel, o.staticVideoTrack)
+		case "stop":
+			log.Printf("handle stop")
+			o.trackMutex.Lock()
+			o.staticVideoTrack.Pause()
+			o.staticVideoTrack.Seek(time.Duration(0))
+			o.trackMutex.Unlock()
+			SendSeekPosition(o.staticVideoTrack.currentPos.Seconds(), dataChannel)
+		case "frame":
+			log.Printf("+frame")
+			o.trackMutex.Lock()
+			o.staticVideoTrack.Pause()
+			o.staticVideoTrack.currentPos += 1
+			o.trackMutex.Unlock()
+			SendSeekPosition(o.staticVideoTrack.currentPos.Seconds(), dataChannel)
+		case "loop":
+			log.Printf("handle loop")
+			o.trackMutex.Lock()
+			o.staticVideoTrack.isLoop = !o.staticVideoTrack.isLoop
+			o.trackMutex.Unlock()
 		}
 
 	})
