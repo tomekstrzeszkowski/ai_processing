@@ -10,8 +10,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export function NavigationListener() {
   const pathname = usePathname();
   const segments = useSegments();
-  const { isWebRtc, p2pPlayer, setStream, isConnected, isConnecting, host, setProtocol, protocol, setIsConnecting } =
-    useProtocol();
+  const {
+    isWebRtc,
+    p2pPlayer,
+    setStream,
+    isConnected,
+    isConnecting,
+    host,
+    setProtocol,
+    protocol,
+    setIsConnecting,
+  } = useProtocol();
   const { handlePlayRef: p2pHandlePlayRef, handleStopRef: p2pHandleStopRef } =
     useP2p();
   const {
@@ -19,14 +28,14 @@ export function NavigationListener() {
     handleStopRef: webrtcHandleStopRef,
     offereeRef,
   } = useWebRtc();
-  const {showAlert} = useToast()
+  const { showAlert } = useToast();
   const [connectionAttempts, setConnectionAttempts] = useState(0);
   const resolversRef = useRef<Array<() => void>>([]);
 
   useEffect(() => {
     if (isConnected) {
       console.log("Connection established! Resolving all pending promises.");
-      resolversRef.current.forEach(resolve => resolve());
+      resolversRef.current.forEach((resolve) => resolve());
       resolversRef.current = [];
     }
   }, [isConnected]);
@@ -54,28 +63,44 @@ export function NavigationListener() {
         }
       });
     }
-  }, [isWebRtc, isConnected, isConnecting, protocol, webrtcHandlePlayRef, offereeRef, setStream, p2pHandlePlayRef, p2pPlayer, host]);
+  }, [
+    isWebRtc,
+    isConnected,
+    isConnecting,
+    protocol,
+    webrtcHandlePlayRef,
+    offereeRef,
+    setStream,
+    p2pHandlePlayRef,
+    p2pPlayer,
+    host,
+  ]);
 
-  const waitForConnection = useCallback((timeoutMs: number) => {
-    return new Promise<void>((resolve, reject) => {
-      if (isConnected) {
-        resolve();
-        return;
-      }
+  const waitForConnection = useCallback(
+    (timeoutMs: number) => {
+      return new Promise<void>((resolve, reject) => {
+        if (isConnected) {
+          resolve();
+          return;
+        }
 
-      const timeout = setTimeout(() => {
-        resolversRef.current = resolversRef.current.filter(r => r !== wrappedResolve);
-        reject(new Error("Connection timeout"));
-      }, timeoutMs);
+        const timeout = setTimeout(() => {
+          resolversRef.current = resolversRef.current.filter(
+            (r) => r !== wrappedResolve,
+          );
+          reject(new Error("Connection timeout"));
+        }, timeoutMs);
 
-      const wrappedResolve = () => {
-        clearTimeout(timeout);
-        resolve();
-      };
+        const wrappedResolve = () => {
+          clearTimeout(timeout);
+          resolve();
+        };
 
-      resolversRef.current.push(wrappedResolve);
-    });
-  }, [isConnected]);
+        resolversRef.current.push(wrappedResolve);
+      });
+    },
+    [isConnected],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -84,16 +109,18 @@ export function NavigationListener() {
       const maxAttempts = 5;
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         if (cancelled) return;
-        
+
         if (attempt === 4) {
           const newProtocol = isWebRtc ? "P2P_PROTOCOL" : "WEBRTC_PROTOCOL";
           console.log(`Switching protocol to ${newProtocol}`);
           setProtocol(newProtocol);
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise((resolve) => setTimeout(resolve, 100));
         }
-        
+
         try {
-          console.log(`Connection attempt ${attempt}/${maxAttempts} with protocol: ${protocol}`);
+          console.log(
+            `Connection attempt ${attempt}/${maxAttempts} with protocol: ${protocol}`,
+          );
           setConnectionAttempts(attempt);
           attemptConnection();
           const timeout = 10000 + 1000 * (attempt - 1);
@@ -102,14 +129,16 @@ export function NavigationListener() {
             console.log(`Successfully connected on attempt ${attempt}`);
           }
           return;
-          
         } catch (error) {
           if (cancelled) return;
-          console.log(`Connection attempt ${attempt}/${maxAttempts} failed:`, error);
-          
+          console.log(
+            `Connection attempt ${attempt}/${maxAttempts} failed:`,
+            error,
+          );
+
           if (attempt === maxAttempts) {
             console.error("All connection attempts failed");
-            showAlert("Can not connect to the server. Try again later")
+            showAlert("Can not connect to the server. Try again later");
           }
         }
       }
@@ -120,7 +149,14 @@ export function NavigationListener() {
       cancelled = true;
       resolversRef.current = [];
     };
-  }, [attemptConnection, waitForConnection, isWebRtc, protocol, setProtocol, showAlert]);
+  }, [
+    attemptConnection,
+    waitForConnection,
+    isWebRtc,
+    protocol,
+    setProtocol,
+    showAlert,
+  ]);
 
   useEffect(() => {
     if (isConnected) {

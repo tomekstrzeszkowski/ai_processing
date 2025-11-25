@@ -1,14 +1,13 @@
-import { useProtocol } from '@/app/protocolProvider';
-import { formatTime } from '@/helpers/formatters';
-import Slider from '@react-native-community/slider';
-import Hls from 'hls.js';
-import { useEffect, useRef, useState } from 'react';
-import { Pressable, Text, TouchableOpacity, View } from 'react-native';
-
+import { useProtocol } from "@/app/protocolProvider";
+import { formatTime } from "@/helpers/formatters";
+import Slider from "@react-native-community/slider";
+import Hls from "hls.js";
+import { useEffect, useRef, useState } from "react";
+import { Pressable, Text, TouchableOpacity, View } from "react-native";
 
 interface LiveVideoPlayerProps {
   isConnected: boolean;
-  stream: MediaStream|string|null;
+  stream: MediaStream | string | null;
   isLive?: boolean;
   seekMax?: number;
   seekValue?: number;
@@ -22,89 +21,85 @@ const hls = new Hls({
 });
 
 export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
-  isConnected, 
-  stream, 
-  isLive, 
-  seekMax=120, 
-  seekValue=0, 
+  isConnected,
+  stream,
+  isLive,
+  seekMax = 120,
+  seekValue = 0,
   handleSeek = () => {},
-  handlePause = () => {},  
-  handlePlay =() => {}, 
-  handleStop = () => {}, 
-  handleLoop = () => {}, 
-  handleFrame = (isForward: boolean) => {}
+  handlePause = () => {},
+  handlePlay = () => {},
+  handleStop = () => {},
+  handleLoop = () => {},
+  handleFrame = (isForward: boolean) => {},
 }) => {
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const { p2pPlayer } = useProtocol();
-    const [isShowMenu, setIsShowMenu] = useState<boolean>(false);
-    const [isPlaying, setIsPlaying] = useState<boolean>(false);
-    
-    useEffect(() => {
-      if (!videoRef.current || !stream) {
-        return;
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const { p2pPlayer } = useProtocol();
+  const [isShowMenu, setIsShowMenu] = useState<boolean>(false);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!videoRef.current || !stream) {
+      return;
+    }
+
+    if (stream instanceof MediaStream) {
+      videoRef.current.srcObject = stream;
+    } else {
+      if (p2pPlayer === "hls") {
+        if (videoRef.current.canPlayType("application/vnd.apple.mpegurl")) {
+          videoRef.current.src = stream;
+        } else if (Hls.isSupported()) {
+          hls.loadSource(stream);
+          hls.attachMedia(videoRef.current);
+        }
+      }
+    }
+    return () => {
+      if (hls) {
+        hls.stopLoad();
+        hls.detachMedia();
+        hls.destroy();
       }
 
-      if (stream instanceof MediaStream) {
-        videoRef.current.srcObject = stream;
-      } else {
-        if (p2pPlayer === "hls") {
-          if (videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
-            videoRef.current.src = stream;
-          } else if (Hls.isSupported()) {
-            hls.loadSource(stream);
-            hls.attachMedia(videoRef.current);
-          }
-        }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+        videoRef.current.src = "";
       }
-      return () => {
-        if (hls) {
-          hls.stopLoad();
-          hls.detachMedia();
-          hls.destroy();
-        }
-        
-        if (videoRef.current) {
-          videoRef.current.srcObject = null;
-          videoRef.current.src = '';
-        }
-      };
-    }, [stream]);
+    };
+  }, [stream]);
 
-    useEffect(function () {
+  useEffect(
+    function () {
       if (!isConnected) {
         hls.stopLoad();
       } else {
         hls.startLoad();
       }
-      
-    }, [isConnected]);
+    },
+    [isConnected],
+  );
 
-    function play() {
-      setIsPlaying(true)
-      handlePlay();
-    }
+  function play() {
+    setIsPlaying(true);
+    handlePlay();
+  }
 
-    function pause() {
-      setIsPlaying(false)
-      handlePause();
-    }
+  function pause() {
+    setIsPlaying(false);
+    handlePause();
+  }
 
-    function stop() {
+  function stop() {}
 
-    }
+  function loop() {}
 
-    function loop() {
-
-    }
-
-    function frame(isForward = true) {
-
-    }
-
+  function frame(isForward = true) {}
 
   return (
-    <View style={{
-        display: "flex", 
+    <View
+      style={{
+        display: "flex",
         flex: 1,
       }}
     >
@@ -112,141 +107,202 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
         onHoverIn={() => setIsShowMenu(true)}
         onHoverOut={() => setIsShowMenu(false)}
       >
-      {(stream instanceof MediaStream || (stream && p2pPlayer === 'hls')) && <video 
-          style={{ display: isConnected ? "flex": "none", margin:"0" }}
-          ref={videoRef}
-          autoPlay 
-          playsInline
-      />}
-      {stream && p2pPlayer === 'image' && <img 
-          src={stream as string}
-          style={{ display: isConnected ? "block": "none", maxWidth: "100%", height: "auto" }}
-          alt="Live stream"
-      />}
-      {(!stream || !isConnected) && (
-        <View style={{
-          width: '100%',
-          height: "100%",
-          backgroundColor: '#1a1a1a',
-          borderRadius: 8,
-          overflow: 'hidden',
-          justifyContent: 'center',
-          alignItems: 'center',
-          minWidth: 300,
-          minHeight: 800,
-        }}>
-          <View style={{
-            position: 'absolute',
-            top: 0,
-            left: '-100%',
-            height: '100%',
-            width: '100%',
-            background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent)',
-            animation: 'shimmer 1.5s infinite'
-          }} />
-          <style>{`
-            @keyframes shimmer {
-              0% { left: -100%; }
-              100% { left: 100%; }
-            }
-          `}</style>
-          <View style={{display: "flex", alignSelf: "center"}}>
-            <Text style={{ color: "#b9b9b9ff" }}>Waiting for stream...</Text>
-          </View>
-        </View>
-      )}
-      {(stream instanceof MediaStream || (stream && p2pPlayer === 'hls')) && <View style={{
-          display: isShowMenu ? "flex" : "none", 
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          padding: 30,
-          background: 'linear-gradient(transparent, #1a1a1a)',
-        }}>
-          {!isLive && <Slider
-            style={{width: "100%", height: 40}}
-            minimumValue={0}
-            maximumValue={seekMax}
-            value={seekValue}
-            minimumTrackTintColor="#e53e3e"
-            maximumTrackTintColor="#ffffff8a"
-            thumbTintColor="#e53e3e"
-            onSlidingComplete={(seek) => handleSeek(seek)}
-          />}
-
+        {(stream instanceof MediaStream || (stream && p2pPlayer === "hls")) && (
+          <video
+            style={{ display: isConnected ? "flex" : "none", margin: "0" }}
+            ref={videoRef}
+            autoPlay
+            playsInline
+          />
+        )}
+        {stream && p2pPlayer === "image" && (
+          <img
+            src={stream as string}
+            style={{
+              display: isConnected ? "block" : "none",
+              maxWidth: "100%",
+              height: "auto",
+            }}
+            alt="Live stream"
+          />
+        )}
+        {(!stream || !isConnected) && (
           <View
             style={{
-              display: 'flex',
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              marginTop: 15,
+              width: "100%",
+              height: "100%",
+              backgroundColor: "#1a1a1a",
+              borderRadius: 8,
+              overflow: "hidden",
+              justifyContent: "center",
+              alignItems: "center",
+              minWidth: 300,
+              minHeight: 800,
             }}
           >
-            {!isPlaying && <TouchableOpacity onPress={play}>
-              <Text style={{ color: "white", fontSize: 12 }}>
-                ▶︎
-              </Text>
-            </TouchableOpacity>}
-            {isPlaying && <TouchableOpacity onPress={pause}>
-              <Text style={{ color: "white", fontSize: 12 }}>
-                ⏸
-              </Text>
-            </TouchableOpacity>}
-            {isLive && <View style={{ flexDirection: 'row'}}>
-              <Text style={{ color: '#ff0000ff', fontSize: 12 }}>
-                {isConnected ? "🔴" : "🔘"}
-              </Text>
-            </View>}
             <View
               style={{
-                flexDirection: "row",
+                position: "absolute",
+                top: 0,
+                left: "-100%",
+                height: "100%",
+                width: "100%",
+                background:
+                  "linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent)",
+                animation: "shimmer 1.5s infinite",
               }}
-            >
-              <Text style={{ color: "white", fontSize: 12 }}>
-                ⏮
-              </Text>
+            />
+            <View style={{ display: "flex", alignSelf: "center" }}>
+              <Text style={{ color: "#b9b9b9ff" }}>Waiting for stream...</Text>
             </View>
-            {!isLive && <View style={{ flexDirection: 'row'}}>
-              <Text style={{ color: 'white', fontSize: 12 }}>
-                {formatTime(seekValue)}
-              </Text>
-              <Text style={{ color: '#fff', fontSize: 12, fontWeight: 900}}>&nbsp;/&nbsp;</Text>
-              <Text style={{ color: '#b9b9b9ff', fontSize: 12 }}>
-                {formatTime(seekMax)}
-              </Text>
-            </View>}
-            <View
-              style={{
-                flexDirection: "row",
-              }}
-            >
-              <Text style={{ color: "white", fontSize: 12 }}>
-                ⏭
-              </Text>
-            </View>
+          </View>
+        )}
+        {(stream instanceof MediaStream || (stream && p2pPlayer === "hls")) && (
+          <View
+            style={{
+              display: isShowMenu ? "flex" : "none",
+              position: "absolute",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              padding: 10,
+              paddingTop: 0,
+              paddingBottom: 20,
+              background: "linear-gradient(transparent, #1a1a1a)",
+              cursor: "default",
+              transitionDuration: "0.8s",
+              transitionTimingFunction: "linear",
+              transitionProperty: "opacity",
+            }}
+          >
             {!isLive && (
+              <Slider
+                style={{ width: "100%", height: 20, cursor: "pointer" }}
+                minimumValue={0}
+                maximumValue={seekMax}
+                value={seekValue}
+                minimumTrackTintColor="#e53e3e"
+                maximumTrackTintColor="#ffffff8a"
+                thumbTintColor="#e53e3e"
+                onSlidingComplete={(seek) => handleSeek(seek)}
+              />
+            )}
+
+            <View
+              style={{
+                display: "flex",
+                flexDirection: "row",
+                marginTop: 15,
+              }}
+            >
               <View
                 style={{
-                  marginLeft: 10,
-                  marginRight: 10,
+                  flexDirection: "row",
+                  flex: 1,
+                  alignItems: "center",
                 }}
               >
-                <Text style={{ color: "white", fontSize: 16 }}>↻</Text>
+                <TouchableOpacity
+                  onPress={isPlaying ? pause : play}
+                  style={{
+                    padding: 8,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "white",
+                      fontSize: 22,
+                      transitionDuration: "0.8s",
+                      transitionTimingFunction: "linear",
+                      transitionProperty: "opacity",
+                      opacity: 1,
+                    }}
+                  >
+                    {isPlaying ? "⏸" : "▶︎"}
+                  </Text>
+                </TouchableOpacity>
+                {isLive && (
+                  <View style={{ flexDirection: "row", paddingLeft: 8 }}>
+                    <Text style={{ color: "#ff0000ff", fontSize: 12 }}>
+                      {isConnected ? "🔴" : "🔘"}
+                    </Text>
+                  </View>
+                )}
               </View>
-            )}
-            <TouchableOpacity
-              style={{
-                marginLeft: 10,
-                marginRight: 10,
-              }}
-              onPress={() => videoRef.current!.requestFullscreen()}
-            >
-              <Text style={{ color: "white", fontSize: 16 }}>⌞ ⌝</Text>
-            </TouchableOpacity>
+              {!isLive && (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    gap: 10,
+                    flex: 1,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <TouchableOpacity
+                    style={{
+                      padding: 8,
+                    }}
+                  >
+                    <Text style={{ color: "white", fontSize: 12 }}>⏮</Text>
+                  </TouchableOpacity>
+
+                  <View style={{ flexDirection: "row" }}>
+                    <Text style={{ color: "white", fontSize: 12 }}>
+                      {formatTime(seekValue)}
+                    </Text>
+                    <Text
+                      style={{ color: "#fff", fontSize: 12, fontWeight: 900 }}
+                    >
+                      &nbsp;/&nbsp;
+                    </Text>
+                    <Text style={{ color: "#b9b9b9ff", fontSize: 12 }}>
+                      {formatTime(seekMax)}
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={{
+                      padding: 8,
+                    }}
+                  >
+                    <Text style={{ color: "white", fontSize: 12 }}>⏭</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              <View
+                style={{
+                  flexDirection: "row-reverse",
+                  flex: 1,
+                  alignItems: "center",
+                }}
+              >
+                <TouchableOpacity
+                  style={{
+                    marginLeft: 10,
+                    marginRight: 10,
+                    padding: 8,
+                  }}
+                  onPress={() => videoRef.current!.requestFullscreen()}
+                >
+                  <Text style={{ color: "white", fontSize: 16 }}>⌞ ⌝</Text>
+                </TouchableOpacity>
+                {!isLive && (
+                  <TouchableOpacity
+                    style={{
+                      marginLeft: 10,
+                      marginRight: 10,
+                      padding: 8,
+                    }}
+                  >
+                    <Text style={{ color: "white", fontSize: 16 }}>↻</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
           </View>
-        </View>}
+        )}
       </Pressable>
     </View>
   );
-}
+};

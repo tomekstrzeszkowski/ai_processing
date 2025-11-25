@@ -68,9 +68,12 @@ export default function videoList() {
       fetchVideoList(startDate, endDate);
     }
     if (isConnected && isWebRtc) {
-      offereeRef.current.registerOrSkipDataChannelListener("seek", function ({seek} : {seek: number}) {
-        setSeek(seek);
-      });
+      offereeRef.current.registerOrSkipDataChannelListener(
+        "seek",
+        function ({ seek }: { seek: number }) {
+          setSeek(seek);
+        },
+      );
     }
   }, [isFocused]);
 
@@ -100,7 +103,7 @@ export default function videoList() {
     }
     setItems(items);
   };
-  async function fetchVideo (nameToFetch: string) {
+  async function fetchVideo(nameToFetch: string) {
     setVideoData("");
     setVideoName("");
     if (isWebRtc) {
@@ -114,7 +117,7 @@ export default function videoList() {
     setTimeout(() => {
       scrollToVideoPlayer();
     }, 100);
-  };
+  }
 
   const renderVideoItem = (item: any, index: number) => (
     <View key={index} style={styles.gridItem}>
@@ -127,7 +130,6 @@ export default function videoList() {
       />
     </View>
   );
-
 
   async function handleSeek(seek: number) {
     if (!isWebRtc) return;
