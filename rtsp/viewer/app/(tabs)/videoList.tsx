@@ -41,6 +41,9 @@ export default function videoList() {
     new Date().toISOString().split("T")[0],
   );
   const [seek, setSeek] = useState<number>(0);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [isLoop, setIsLoop] = useState<boolean>(false);
+  const [duration, setDuration] = useState<number>(0);
 
   useEffect(() => {
     return () => {
@@ -67,15 +70,40 @@ export default function videoList() {
     if (items.length === 0) {
       fetchVideoList(startDate, endDate);
     }
-    if (isConnected && isWebRtc) {
+    if (isWebRtc) {
       offereeRef.current.registerOrSkipDataChannelListener(
-        "seek",
-        function ({ seek }: { seek: number }) {
-          setSeek(seek);
+        "status",
+        function (
+          { 
+            seek, 
+            isPlaying,
+            isLoop,
+            duration,
+          }: { 
+            type: string, 
+            seek: number | undefined, 
+            isPlaying: boolean | undefined, 
+            isLoop: boolean | undefined,
+            duration: number | undefined, 
+          }
+        ) {
+          console.log("durat", duration)
+          if (seek !== undefined) {
+              setSeek(seek);
+          }
+          if (isPlaying !== undefined) {
+            setIsPlaying(isPlaying);
+          }
+          if (isLoop !== undefined) {
+            setIsLoop(isLoop);
+          }
+          if (duration !== undefined) {
+              setDuration(duration);
+          }
         },
       );
     }
-  }, [isFocused]);
+  }, [isFocused, isConnected]);
 
   const scrollToVideoPlayer = () => {
     if (scrollViewRef.current) {
@@ -133,6 +161,7 @@ export default function videoList() {
 
   async function handleSeek(seek: number) {
     if (!isWebRtc) return;
+    console.log("handleSeek", seek);
     await offereeRef.current.dataChannel?.send(
       JSON.stringify({ type: "seek", seek }),
     );
@@ -147,6 +176,19 @@ export default function videoList() {
     if (!isWebRtc) return;
     await offereeRef.current.dataChannel?.send(
       JSON.stringify({ type: "resume" }),
+    );
+  }
+  async function handleLoop() {
+    if (!isWebRtc) return;
+    console.log("SEND LOOP")
+    await offereeRef.current.dataChannel?.send(
+      JSON.stringify({ type: "loop" }),
+    );
+  }
+  async function handleFrame(isForward: boolean = true) {
+    if (!isWebRtc) return;
+    await offereeRef.current.dataChannel?.send(
+      JSON.stringify({ type: "frame", isForward }),
     );
   }
   return (
@@ -199,10 +241,14 @@ export default function videoList() {
                 isConnected={isConnected}
                 isLive={false}
                 seekValue={seek}
-                seekMax={6}
+                seekMax={duration}
+                isPlaying={isPlaying}
+                isLoop={isLoop}
                 handleSeek={handleSeek}
                 handlePause={handlePause}
                 handlePlay={handlePlay}
+                handleLoop={handleLoop}
+                handleFrame={handleFrame}
               />
             )}
           </View>

@@ -11,9 +11,13 @@ interface LiveVideoPlayerProps {
   isLive?: boolean;
   seekMax?: number;
   seekValue?: number;
+  isPlaying?: boolean;
+  isLoop?: boolean;
   handleSeek?: Function;
   handlePause?: Function;
   handlePlay?: Function;
+  handleLoop?: Function;
+  handleFrame?: Function;
 }
 const hls = new Hls({
   enableWorker: true,
@@ -26,17 +30,17 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
   isLive,
   seekMax = 120,
   seekValue = 0,
+  isPlaying = true,
+  isLoop = false,
   handleSeek = () => {},
   handlePause = () => {},
   handlePlay = () => {},
-  handleStop = () => {},
   handleLoop = () => {},
   handleFrame = (isForward: boolean) => {},
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const { p2pPlayer } = useProtocol();
   const [isShowMenu, setIsShowMenu] = useState<boolean>(false);
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
 
   useEffect(() => {
     if (!videoRef.current || !stream) {
@@ -81,16 +85,12 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
   );
 
   function play() {
-    setIsPlaying(true);
     handlePlay();
   }
 
   function pause() {
-    setIsPlaying(false);
     handlePause();
   }
-
-  function stop() {}
 
   function loop() {}
 
@@ -147,8 +147,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
                 left: "-100%",
                 height: "100%",
                 width: "100%",
-                background:
-                  "linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent)",
+                background: "linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent)",
                 animation: "shimmer 1.5s infinite",
               }}
             />
@@ -243,6 +242,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
                     style={{
                       padding: 8,
                     }}
+                    onPress={() => handleFrame(false)}
                   >
                     <Text style={{ color: "white", fontSize: 12 }}>⏮</Text>
                   </TouchableOpacity>
@@ -265,6 +265,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
                     style={{
                       padding: 8,
                     }}
+                    onPress={() => handleFrame(true)}
                   >
                     <Text style={{ color: "white", fontSize: 12 }}>⏭</Text>
                   </TouchableOpacity>
@@ -294,8 +295,9 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
                       marginRight: 10,
                       padding: 8,
                     }}
+                    onPress={() => handleLoop()}
                   >
-                    <Text style={{ color: "white", fontSize: 16 }}>↻</Text>
+                    <Text style={{ color: "white", fontSize: 16 }}>{isLoop ? "↻": "↿"}</Text>
                   </TouchableOpacity>
                 )}
               </View>

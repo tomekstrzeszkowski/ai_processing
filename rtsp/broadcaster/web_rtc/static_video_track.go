@@ -24,6 +24,7 @@ type StaticVideoTrack struct {
 	reader     *h264reader.H264Reader
 	file       *os.File
 	frameDur   time.Duration
+	totalDur   time.Duration
 	playing    bool
 	currentPos time.Duration
 	frameCount int64
@@ -51,7 +52,8 @@ func NewStaticVideoTrack() (*StaticVideoTrack, error) {
 		cancel:     cancel,
 		playCtx:    playCtx,
 		playCancel: playCancel,
-		frameDur:   time.Millisecond * 33,
+		frameDur:   time.Second / 30,
+		totalDur:   -1 * time.Second,
 		isLoop:     false,
 	}, nil
 }
@@ -83,7 +85,45 @@ func (vt *StaticVideoTrack) LoadVideo(filePath string) error {
 	vt.reader = reader
 	vt.currentPos = 0
 	vt.frameCount = 0
+	frameDur, err := GetFrameDuration(filePath)
+	if err != nil {
+		log.Printf("Warning: could not detect framerate, using default: %v", err)
+		vt.frameDur = time.Second / 30 // fallback
+	} else {
+		vt.frameDur = frameDur
+		log.Printf("Detected frame duration: %v (%.2f fps)", frameDur, float64(time.Second)/float64(frameDur))
+	}
+	vt.frameDur = frameDur
+	if err := vt.ReadDuration(filePath); err != nil {
+		return fmt.Errorf("Can not read file duration %w", err)
+	}
 
+	return nil
+}
+
+func (vt *StaticVideoTrack) ReadDuration(filePath string) error {
+	// Count total frames to calculate duration
+	fileDuration, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer fileDuration.Close()
+	readerDuration, err := h264reader.NewReader(fileDuration)
+	if err != nil {
+		return err
+	}
+	totalFrames := int64(0)
+	for {
+		nal, err := readerDuration.NextNAL()
+		if err == io.EOF {
+			break
+		}
+		nalUnitType := nal.Data[0] & 0x1F
+		if nalUnitType == 1 || nalUnitType == 5 {
+			totalFrames++
+		}
+	}
+	vt.totalDur = time.Duration(totalFrames) * vt.frameDur
 	return nil
 }
 
@@ -97,6 +137,7 @@ func (vt *StaticVideoTrack) Play() {
 }
 
 func (vt *StaticVideoTrack) Pause() {
+	log.Printf("Play pause")
 	vt.mu.Lock()
 	defer vt.mu.Unlock()
 	vt.playing = false
@@ -122,10 +163,10 @@ func (vt *StaticVideoTrack) Seek(position time.Duration) error {
 		return fmt.Errorf("failed to recreate reader: %w", err)
 	}
 	vt.reader = reader
+
 	targetFrame := int64(position / vt.frameDur)
-	log.Print("Seeking to frame ", targetFrame)
 	currentFrame := int64(0)
-	foundKeyframe := false
+	lastKeyframe := int64(0)
 
 	for currentFrame < targetFrame {
 		nal, err := vt.reader.NextNAL()
@@ -139,22 +180,20 @@ func (vt *StaticVideoTrack) Seek(position time.Duration) error {
 		}
 
 		nalUnitType := nal.Data[0] & 0x1F
-		if nalUnitType == 1 || nalUnitType == 5 { // Non-IDR or IDR slice
+		if nalUnitType == 5 { // IDR (keyframe)
+			lastKeyframe = currentFrame
+		}
+
+		if nalUnitType == 1 || nalUnitType == 5 {
 			currentFrame++
-			if nalUnitType == 5 && currentFrame >= targetFrame-30 {
-				foundKeyframe = true
-				break
-			}
 		}
 	}
 
 	vt.currentPos = time.Duration(currentFrame) * vt.frameDur
 	vt.frameCount = currentFrame
 
-	if !foundKeyframe && targetFrame > 0 {
-		fmt.Printf("Warning: Seeked to frame %d (requested %d), may not be at keyframe\n",
-			currentFrame, targetFrame)
-	}
+	log.Printf("Seeked to frame %d (%.2fs), last keyframe at %d",
+		currentFrame, vt.currentPos.Seconds(), lastKeyframe)
 
 	return nil
 }
@@ -238,4 +277,33 @@ func (vt *StaticVideoTrack) Close() error {
 		return vt.file.Close()
 	}
 	return nil
+}
+func (vt *StaticVideoTrack) PlayFrame() {
+	nal, err := vt.reader.NextNAL()
+	if err != nil {
+		if err == io.EOF {
+			return
+		}
+	}
+	if err := vt.track.WriteSample(media.Sample{
+		Data:     nal.Data,
+		Duration: vt.frameDur,
+	}); err != nil {
+		fmt.Printf("Error writing sample: %v\n", err)
+	}
+	nalUnitType := nal.Data[0] & 0x1F
+	if nalUnitType == 1 || nalUnitType == 5 {
+		vt.currentPos += vt.frameDur
+	}
+}
+func (vt *StaticVideoTrack) PlayBackFrame() {
+	previousPos := vt.currentPos - vt.frameDur*2
+	if previousPos < 0 {
+		previousPos = 0
+	}
+	if err := vt.Seek(previousPos); err != nil {
+		fmt.Printf("Error seeking back: %v\n", err)
+		return
+	}
+	vt.PlayFrame()
 }

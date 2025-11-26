@@ -107,6 +107,7 @@ export function NavigationListener() {
 
     async function connectionWorkflow() {
       const maxAttempts = 5;
+      const defaultProtocol = protocol
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         if (cancelled) return;
 
@@ -137,6 +138,7 @@ export function NavigationListener() {
           );
 
           if (attempt === maxAttempts) {
+            setProtocol(defaultProtocol);
             console.error("All connection attempts failed");
             showAlert("Can not connect to the server. Try again later");
           }
