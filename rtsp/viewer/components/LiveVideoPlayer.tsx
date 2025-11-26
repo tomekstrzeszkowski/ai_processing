@@ -1,9 +1,11 @@
 import { useProtocol } from "@/app/protocolProvider";
+import { VideoLoader } from "@/components/ui/VideoLoader";
 import { formatTime } from "@/helpers/formatters";
 import Slider from "@react-native-community/slider";
 import Hls from "hls.js";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, Text, TouchableOpacity, View } from "react-native";
+
 
 interface LiveVideoPlayerProps {
   isConnected: boolean;
@@ -92,10 +94,6 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
     handlePause();
   }
 
-  function loop() {}
-
-  function frame(isForward = true) {}
-
   return (
     <View
       style={{
@@ -126,36 +124,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
             alt="Live stream"
           />
         )}
-        {(!stream || !isConnected) && (
-          <View
-            style={{
-              width: "100%",
-              height: "100%",
-              backgroundColor: "#1a1a1a",
-              borderRadius: 8,
-              overflow: "hidden",
-              justifyContent: "center",
-              alignItems: "center",
-              minWidth: 300,
-              minHeight: 800,
-            }}
-          >
-            <View
-              style={{
-                position: "absolute",
-                top: 0,
-                left: "-100%",
-                height: "100%",
-                width: "100%",
-                background: "linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent)",
-                animation: "shimmer 1.5s infinite",
-              }}
-            />
-            <View style={{ display: "flex", alignSelf: "center" }}>
-              <Text style={{ color: "#b9b9b9ff" }}>Waiting for stream...</Text>
-            </View>
-          </View>
-        )}
+        {(!stream || !isConnected) && (<VideoLoader />)}
         {(stream instanceof MediaStream || (stream && p2pPlayer === "hls")) && (
           <View
             style={{
