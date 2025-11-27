@@ -178,7 +178,11 @@ func (o *Offeror) CreateDataChannel() (*webrtc.DataChannel, error) {
 		case "videoList":
 			start, _ := time.Parse("2006-01-02", message.StartDate)
 			end, _ := time.Parse("2006-01-02", message.EndDate)
-			videoList, _ := video.GetVideoByDateRange(o.savedVideoPath, start, end)
+			videoList, err := video.GetVideoByDateRange(o.savedVideoPath, start, end)
+			if err != nil {
+				log.Printf("video list error %v", err)
+				return
+			}
 			videoListMessage := VideoListMessage{Type: "videoList", VideoList: videoList}
 			if responseMessage, err := json.Marshal(videoListMessage); err == nil {
 				log.Printf("Sending %s", responseMessage)

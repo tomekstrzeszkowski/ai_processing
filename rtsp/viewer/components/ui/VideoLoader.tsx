@@ -2,6 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 
+const height = 800;
 export const VideoLoader = () => {
   const shimmerAnim = useRef(new Animated.Value(0)).current;
   const [containerWidth, setContainerWidth] = useState(0);
@@ -36,7 +37,7 @@ export const VideoLoader = () => {
 
   const translateX = shimmerAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [-200, containerWidth],
+    outputRange: [-height - 200, containerWidth],
   });
 
   const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
@@ -56,7 +57,10 @@ export const VideoLoader = () => {
         style={[
           styles.shimmer,
           {
-            transform: [{ translateX }],
+            transform: [
+              { translateX },
+              { rotate: '0deg' },
+            ],
           },
         ]}
       />
@@ -76,15 +80,15 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
-    minWidth: 300,
-    minHeight: 800,
+    minWidth: 10,
+    minHeight: height,
   },
   shimmer: {
     position: "absolute",
     top: 0,
     left: 0,
     height: "100%",
-    width: 200,
+    width: height,
   },
   textContainer: {
     display: "flex",
