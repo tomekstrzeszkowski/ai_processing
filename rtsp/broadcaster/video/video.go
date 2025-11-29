@@ -48,7 +48,7 @@ func GetVideoByDateRange(path string, start time.Time, end time.Time) ([]Video, 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return nil, fmt.Errorf("path does not exist: %s", path)
 	}
-	var videoList []Video
+	var videoList []Video = []Video{}
 	pattern := regexp.MustCompile(`^(\d{4}-\d{2}-\d{2})-(\d+)\.mp4$`)
 
 	err := filepath.Walk(path, func(pathWalk string, info os.FileInfo, err error) error {

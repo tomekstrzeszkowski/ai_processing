@@ -2,6 +2,7 @@ package web_rtc
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"image"
 	"log"
@@ -23,6 +24,9 @@ type VideoTrack struct {
 		Read() ([]byte, func(), error)
 		Close() error
 	}
+	ctx    context.Context
+	cancel context.CancelFunc
+	frame  chan []byte
 }
 
 func (vt *VideoTrack) SendFrame(frame image.Image) error {
@@ -105,32 +109,35 @@ func NewVideoTrack() (*VideoTrack, error) {
 		log.Fatal(err)
 		return nil, err
 	}
-
+	ctx, cancel := context.WithCancel(context.Background())
 	return &VideoTrack{
-		track: track,
+		track:  track,
+		ctx:    ctx,
+		cancel: cancel,
+		frame:  make(chan []byte, 1),
 	}, nil
 }
 
 func (vt *VideoTrack) Start(memory *watcher.SharedMemoryReceiver) {
-	ticker := time.NewTicker(time.Second / 30) // 30 FPS
-	defer ticker.Stop()
-
-	for range ticker.C {
-		frameData, _, err := memory.ReadFrameFromShm()
-		if err != nil {
-			log.Printf("Error reading frame: %v", err)
-			continue
+	for frame := range memory.Frames {
+		select {
+		case vt.frame <- frame:
+			img, _, err := image.Decode(bytes.NewReader(frame))
+			if err != nil {
+				log.Printf("Error decoding image: %v", err)
+				continue
+			}
+			vt.SendFrame(img)
+		case <-vt.ctx.Done():
+			return
+		default:
+			log.Printf("Dropping frame in VideoTrack")
 		}
-		img, _, err := image.Decode(bytes.NewReader(frameData))
-		if err != nil {
-			log.Printf("Error decoding image: %v", err)
-			continue
-		}
-		vt.SendFrame(img)
 	}
 }
 
 func (vt *VideoTrack) Close() error {
+	vt.cancel()
 	if vt.encoder != nil {
 		return vt.encoder.Close()
 	}

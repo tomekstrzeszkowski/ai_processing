@@ -121,6 +121,50 @@ func (smr *SharedMemoryReceiver) GetBaseDir() string {
 	year, month, day := time.Now().Date()
 	return fmt.Sprintf("%s/%d-%02d-%02d", smr.savePath, year, month, day)
 }
+func (smr *SharedMemoryReceiver) WatchSharedMemoryReadOnly() {
+	log.Println("Starting shared memory watcher in read-only mode...")
+	startTime := time.Now()
+	frameCount := 0
+	for {
+		select {
+		case event, ok := <-smr.watcher.Events:
+			if !ok {
+				return
+			}
+
+			// Check if it's our target file and it was written to
+			if event.Name == smr.shmPath &&
+				(event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create) {
+
+				frameData, detected, err := smr.ReadFrameFromShm()
+				if err != nil {
+					log.Printf("Error reading frame from shared memory: %v", err)
+					continue
+				}
+				elapsedTime := time.Since(startTime)
+				frameCount++
+				if elapsedTime > time.Second {
+					smr.ActualFps = float64(frameCount) / elapsedTime.Seconds()
+					frameCount = 0
+					startTime = time.Now()
+				}
+				smr.Frames <- frameData
+				log.Printf(
+					"[FPS %f] New frame received: %d bytes, that was %d",
+					smr.ActualFps,
+					len(frameData),
+					detected,
+				)
+			}
+
+		case err, ok := <-smr.watcher.Errors:
+			if !ok {
+				return
+			}
+			log.Printf("Watcher error: %v", err)
+		}
+	}
+}
 func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 	log.Println("Starting shared memory watcher...")
 	showWhatWasAfter := smr.configProvider.GetShowWhatWasAfter()
