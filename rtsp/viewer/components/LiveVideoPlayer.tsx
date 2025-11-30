@@ -35,8 +35,8 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
   isPlaying = true,
   isLoop = false,
   handleSeek = () => {},
-  handlePause = () => {},
-  handlePlay = () => {},
+  handlePause = (video: HTMLVideoElement) => {},
+  handlePlay = (video: HTMLVideoElement) => {},
   handleLoop = () => {},
   handleFrame = (isForward: boolean) => {},
 }) => {
@@ -87,11 +87,11 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
   );
 
   function play() {
-    handlePlay();
+    handlePlay(videoRef.current);
   }
 
   function pause() {
-    handlePause();
+    handlePause(videoRef.current);
   }
 
   return (

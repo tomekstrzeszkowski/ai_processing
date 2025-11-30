@@ -53,9 +53,7 @@ class Detector:
         return cv2.dnn.readNetFromONNX(self.yolo_model_name)
 
     def _scale_input(self, original_image):
-        net = self.model
         [height, width, _] = original_image.shape
-        # Prepare a square image for inference
         length = max((height, width))
         image = np.zeros((length, length, 3), np.uint8)
         image[0:height, 0:width] = original_image
@@ -66,10 +64,8 @@ class Detector:
         blob = cv2.dnn.blobFromImage(
             image, scalefactor=1 / 255, size=(size, size), swapRB=True
         )
-        net.setInput(blob)
-        # Perform inference
-        outputs = net.forward()
-        # Prepare output array
+        self.model.setInput(blob)
+        outputs = self.model.forward()
         outputs = np.array([cv2.transpose(outputs[0])])
         return outputs, scale
 
@@ -83,7 +79,7 @@ class Detector:
             (minScore, maxScore, minClassLoc, (x, maxClassIndex)) = cv2.minMaxLoc(
                 classes_scores
             )
-            if maxScore >= 0.3 and maxClassIndex in self.detect_only_yolo_class_id:
+            if maxScore >= 0.34 and maxClassIndex in self.detect_only_yolo_class_id:
                 center_x_norm = outputs[0][i][0]  # normalized center x (0-1)
                 center_y_norm = outputs[0][i][1]  # normalized center y (0-1)
                 width_norm = outputs[0][i][2]     # normalized width (0-1)

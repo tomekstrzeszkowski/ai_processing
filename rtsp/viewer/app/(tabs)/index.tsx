@@ -1,11 +1,12 @@
 import { useProtocol } from "@/app/protocolProvider";
 import { LiveVideoPlayer } from "@/components/LiveVideoPlayer";
-import React from "react";
+import React, { useState } from "react";
 import { Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 export default function app() {
   const { lastFrameTime, isConnected, stream } = useProtocol();
+  const [isPlaying, setIsPlaying] = useState<boolean>(true);
 
   return (
     <SafeAreaProvider>
@@ -23,7 +24,22 @@ export default function app() {
             marginBottom: "auto"
           }}
         >
-          <LiveVideoPlayer stream={stream} isConnected={isConnected} isLive={true} />
+          <LiveVideoPlayer 
+            stream={stream} 
+            isConnected={isConnected} 
+            isLive={true}
+            isPlaying={isPlaying}
+            handlePlay={(video: HTMLVideoElement) => {
+              console.log('video play', video)
+              video.play()
+              setIsPlaying(true);
+            }}
+            handlePause={(video: HTMLVideoElement) => {
+              console.log('video pause', video)
+              video.pause()
+              setIsPlaying(false);
+            }}
+          />
           {lastFrameTime && (
             <View
               style={{
