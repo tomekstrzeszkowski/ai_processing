@@ -94,7 +94,7 @@ func RunLive(signalingUrl string) {
 			panic(fmt.Sprintf("Error creating shared memory receiver: %v", err))
 		}
 		go memory.WatchSharedMemoryReadOnly()
-		videoTrack, err := NewVideoTrack()
+		videoTrack, err = NewVideoTrack()
 		if err != nil {
 			panic(err)
 		}
@@ -102,5 +102,6 @@ func RunLive(signalingUrl string) {
 		go videoTrack.Start(memory)
 	}
 
-	listen(wsClient, videoTrack, savePath)
+	go listen(wsClient, videoTrack, savePath)
+	select {}
 }
