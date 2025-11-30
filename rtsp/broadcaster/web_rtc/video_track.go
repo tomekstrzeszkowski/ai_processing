@@ -2,6 +2,7 @@ package web_rtc
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"image"
 	"log"
@@ -15,6 +16,28 @@ import (
 	"strzcam.com/broadcaster/watcher"
 )
 
+type frameReader struct {
+	frameChan chan image.Image
+	width     int
+	height    int
+}
+
+func newFrameReader(width, height int) *frameReader {
+	return &frameReader{
+		frameChan: make(chan image.Image, 1),
+		width:     width,
+		height:    height,
+	}
+}
+
+func (r *frameReader) Read() (image.Image, func(), error) {
+	frame, ok := <-r.frameChan
+	if !ok {
+		return nil, func() {}, fmt.Errorf("frame channel closed")
+	}
+	return frame, func() {}, nil
+}
+
 type VideoTrack struct {
 	track   *webrtc.TrackLocalStaticSample
 	reader  *frameReader
@@ -23,6 +46,28 @@ type VideoTrack struct {
 		Read() ([]byte, func(), error)
 		Close() error
 	}
+	ctx    context.Context
+	cancel context.CancelFunc
+	frame  chan []byte
+}
+
+func NewVideoTrack() (*VideoTrack, error) {
+	track, err := webrtc.NewTrackLocalStaticSample(
+		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8},
+		"live",
+		"video_frame_live",
+	)
+	if err != nil {
+		log.Fatal(err)
+		return nil, err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	return &VideoTrack{
+		track:  track,
+		ctx:    ctx,
+		cancel: cancel,
+		frame:  make(chan []byte, 1),
+	}, nil
 }
 
 func (vt *VideoTrack) SendFrame(frame image.Image) error {
@@ -61,8 +106,6 @@ func (vt *VideoTrack) SendFrame(frame image.Image) error {
 		log.Printf("Error reading from encoder: %v", err)
 		return err
 	}
-
-	// Send to webRTC peer
 	if err := vt.track.WriteSample(media.Sample{
 		Data:     encodedFrame,
 		Duration: time.Second / 30,
@@ -72,65 +115,46 @@ func (vt *VideoTrack) SendFrame(frame image.Image) error {
 
 	return nil
 }
-
-type frameReader struct {
-	frameChan chan image.Image
-	width     int
-	height    int
-}
-
-func newFrameReader(width, height int) *frameReader {
-	return &frameReader{
-		frameChan: make(chan image.Image, 1),
-		width:     width,
-		height:    height,
-	}
-}
-
-func (r *frameReader) Read() (image.Image, func(), error) {
-	frame, ok := <-r.frameChan
-	if !ok {
-		return nil, func() {}, fmt.Errorf("frame channel closed")
-	}
-	return frame, func() {}, nil
-}
-
-func NewVideoTrack() (*VideoTrack, error) {
-	track, err := webrtc.NewTrackLocalStaticSample(
-		webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8},
-		"live",
-		"video_frame_live",
-	)
-	if err != nil {
-		log.Fatal(err)
-		return nil, err
-	}
-
-	return &VideoTrack{
-		track: track,
-	}, nil
-}
-
 func (vt *VideoTrack) Start(memory *watcher.SharedMemoryReceiver) {
-	ticker := time.NewTicker(time.Second / 30) // 30 FPS
-	defer ticker.Stop()
+	var currentFrame image.Image
+	var cancel context.CancelFunc
 
-	for range ticker.C {
-		frameData, _, err := memory.ReadFrameFromShm()
-		if err != nil {
-			log.Printf("Error reading frame: %v", err)
-			continue
-		}
-		img, _, err := image.Decode(bytes.NewReader(frameData))
+	for frame := range memory.Frames {
+
+		img, _, err := image.Decode(bytes.NewReader(frame))
 		if err != nil {
 			log.Printf("Error decoding image: %v", err)
 			continue
 		}
-		vt.SendFrame(img)
+		if cancel != nil {
+			cancel()
+		}
+		currentFrame = img
+		vt.SendFrame(currentFrame)
+		// repeat the same frame with 30 FPS
+		ctx, cancelFunc := context.WithCancel(vt.ctx)
+		cancel = cancelFunc
+		go func(frame image.Image) {
+			ticker := time.NewTicker(time.Second / 30)
+			defer ticker.Stop()
+
+			for {
+				select {
+				case <-ticker.C:
+					vt.SendFrame(frame)
+				case <-ctx.Done():
+					return
+				}
+			}
+		}(currentFrame)
+	}
+	if cancel != nil {
+		cancel()
 	}
 }
 
 func (vt *VideoTrack) Close() error {
+	vt.cancel()
 	if vt.encoder != nil {
 		return vt.encoder.Close()
 	}

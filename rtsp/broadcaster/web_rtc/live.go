@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 
 	_ "image/jpeg"
 	_ "image/png"
@@ -50,24 +51,17 @@ func listen(wsClient *websocket.Conn, videoTrack *VideoTrack, savePath string) {
 				continue
 			}
 			for _, iceData := range msg.Ice {
-				candidateStr, ok := iceData["candidate"].(string)
-				if !ok {
-					continue
+				candidate := webrtc.ICECandidateInit{}
+				if candidateStr, ok := iceData["candidate"].(string); ok {
+					candidate.Candidate = candidateStr
 				}
-
-				candidate := webrtc.ICECandidateInit{
-					Candidate: candidateStr,
-				}
-
 				if sdpMid, ok := iceData["sdpMid"].(string); ok {
 					candidate.SDPMid = &sdpMid
 				}
-
 				if sdpMLineIndex, ok := iceData["sdpMLineIndex"].(float64); ok {
 					idx := uint16(sdpMLineIndex)
 					candidate.SDPMLineIndex = &idx
 				}
-
 				if err := offeror.pc.AddICECandidate(candidate); err != nil {
 					log.Printf("Error adding ICE candidate: %v", err)
 				}
@@ -82,25 +76,32 @@ func listen(wsClient *websocket.Conn, videoTrack *VideoTrack, savePath string) {
 }
 
 func RunLive(signalingUrl string) {
-	memory, err := watcher.NewSharedMemoryReceiver("video_frame")
-	savePath := fmt.Sprintf("%s_video_frame", watcher.SavePath)
-	if err != nil {
-		panic(fmt.Sprintf("Error creating shared memory receiver: %v", err))
-	}
 	if err := godotenv.Load(); err != nil {
 		log.Printf("Warning: Error loading .env file: %v", err)
 	}
+	videoFrame := os.Getenv("VIDEO_FRAME")
+	isLiveStream := os.Getenv("WEBRTC_STREAM_LIVE")
 	wsClient, _, err := websocket.DefaultDialer.Dial(signalingUrl, nil)
 	if err != nil {
 		panic(err)
 	}
 	defer wsClient.Close()
-	videoTrack, err := NewVideoTrack()
-	if err != nil {
-		panic(err)
+	savePath := fmt.Sprintf("%s_%s", watcher.SavePath, videoFrame)
+	var videoTrack *VideoTrack = nil
+	if isLiveStream == "true" {
+		memory, err := watcher.NewSharedMemoryReceiver(videoFrame)
+		if err != nil {
+			panic(fmt.Sprintf("Error creating shared memory receiver: %v", err))
+		}
+		go memory.WatchSharedMemoryReadOnly()
+		videoTrack, err = NewVideoTrack()
+		if err != nil {
+			panic(err)
+		}
+		defer videoTrack.Close()
+		go videoTrack.Start(memory)
 	}
-	defer videoTrack.Close()
 
 	go listen(wsClient, videoTrack, savePath)
-	videoTrack.Start(memory)
+	select {}
 }

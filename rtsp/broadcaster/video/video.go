@@ -48,9 +48,10 @@ func GetVideoByDateRange(path string, start time.Time, end time.Time) ([]Video, 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return nil, fmt.Errorf("path does not exist: %s", path)
 	}
-	videoList := []Video{}
+	var videoList []Video = []Video{}
 	//date Y-m-d-part-video_length
 	pattern := regexp.MustCompile(`^(\d{4}-\d{2}-\d{2})-\d+(?:-\d+)?\.mp4$`)
+
 	err := filepath.Walk(path, func(pathWalk string, info os.FileInfo, err error) error {
 		if err != nil {
 			return fmt.Errorf("error accessing file %s: %v", pathWalk, err)
@@ -59,10 +60,6 @@ func GetVideoByDateRange(path string, start time.Time, end time.Time) ([]Video, 
 			return nil
 		}
 		fileName := info.Name()
-
-		if !strings.HasSuffix(strings.ToLower(fileName), ".mp4") {
-			return nil
-		}
 		matches := pattern.FindStringSubmatch(fileName)
 		if matches == nil {
 			return nil // Skip files that don't match pattern
@@ -80,6 +77,7 @@ func GetVideoByDateRange(path string, start time.Time, end time.Time) ([]Video, 
 				Size: int64(stat.Blocks) * 512,
 			})
 		}
+
 		return nil
 	})
 
@@ -89,12 +87,10 @@ func GetVideoByDateRange(path string, start time.Time, end time.Time) ([]Video, 
 
 	// Sort by date (newest first), then by filename for same dates
 	sort.Slice(videoList, func(i, j int) bool {
-		// Extract dates for comparison
 		matchA := pattern.FindStringSubmatch(videoList[i].Name)[1]
 		matchB := pattern.FindStringSubmatch(videoList[j].Name)[1]
 		dateA, _ := time.Parse("2006-01-02", matchA)
 		dateB, _ := time.Parse("2006-01-02", matchB)
-
 		if dateA.Equal(dateB) {
 			// For same date, sort by filename (which includes the number suffix)
 			return videoList[i].Name < videoList[j].Name

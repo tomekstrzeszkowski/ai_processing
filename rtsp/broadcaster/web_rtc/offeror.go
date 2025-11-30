@@ -51,6 +51,7 @@ type Offeror struct {
 	staticVideoTrack *StaticVideoTrack
 	savedVideoPath   string
 	trackMutex       sync.Mutex
+	IceCandidates    []*webrtc.ICECandidate
 }
 
 func NewOfferor(wsClient *websocket.Conn, savedVideoPath string) (Offeror, error) {
@@ -67,15 +68,12 @@ func (o *Offeror) CreatePeerConnection(videoTrack *VideoTrack) (*webrtc.PeerConn
 	if error != nil {
 		log.Fatal(error)
 	}
-	if videoTrack != nil {
-		o.videoTrack = videoTrack
-	}
+	o.videoTrack = videoTrack
 	o.HandlePeerConnection()
 	return o.pc, error
 }
 
 func (o *Offeror) Close() {
-	fmt.Print("CLOSING offeror!!")
 	o.staticVideoTrack = nil
 	o.pc.Close()
 }
@@ -113,6 +111,29 @@ func (o *Offeror) HandlePeerConnection() {
 		}
 		fmt.Printf("Negotiation needed, create and send a new offer connection state: %s", state)
 		o.CreateAndSendOffer()
+	})
+	//TODO: maybe buffer ice candidates and send them when connection is established
+	o.pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
+		if candidate == nil {
+			return
+		}
+		o.IceCandidates = append(o.IceCandidates, candidate)
+	})
+}
+
+func (o *Offeror) SendIceCandidates() {
+	ice := []map[string]any{}
+	for _, candidate := range o.IceCandidates {
+		jsonCandidate := candidate.ToJSON()
+		ice = append(ice, map[string]any{
+			"candidate":     jsonCandidate.Candidate,
+			"sdpMid":        jsonCandidate.SDPMid,
+			"sdpMLineIndex": jsonCandidate.SDPMLineIndex,
+		})
+	}
+	o.wsClient.WriteJSON(SignalingMessage{
+		Type: "ice",
+		Ice:  ice,
 	})
 }
 
