@@ -43,7 +43,7 @@ export const ProtocolProvider = ({
   const [host, setHost] = useState<string>(
     process.env.EXPO_PUBLIC_P2P_HOST ??
       (Platform.OS === "web"
-        ? document.location.hostname || "http://localhost:7071"
+        ? document.location.hostname || "http://localhost:7080"
         : "localhost"),
   );
   function handleSetLastFrameTime(time: Date) {

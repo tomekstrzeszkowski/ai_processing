@@ -21,6 +21,11 @@ type HLSConverter struct {
 }
 
 func NewHLSConverter(outputDir string, frames chan [][]byte) (*HLSConverter, error) {
+	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(outputDir, 0755); err != nil {
+			panic(fmt.Sprintf("Cannot create directory: %v", err))
+		}
+	}
 	return &HLSConverter{
 		segmentDir:   outputDir,
 		playlistPath: filepath.Join(outputDir, "stream.m3u8"),

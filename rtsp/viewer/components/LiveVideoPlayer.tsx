@@ -10,6 +10,7 @@ import { Pressable, Text, TouchableOpacity, View } from "react-native";
 interface LiveVideoPlayerProps {
   isConnected: boolean;
   stream: MediaStream | string | null;
+  isStreamHls?: boolean;
   isLive?: boolean;
   seekMax?: number;
   seekValue?: number;
@@ -30,11 +31,12 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
   isConnected,
   stream,
   isLive,
+  isStreamHls = false,
   seekMax = 120,
   seekValue = 0,
   isPlaying = true,
   isLoop = false,
-  handleSeek = () => {},
+  handleSeek = (video: HTMLVideoElement, seek: number) => {},
   handlePause = (video: HTMLVideoElement) => {},
   handlePlay = (video: HTMLVideoElement) => {},
   handleLoop = () => {},
@@ -53,7 +55,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
       videoRef.current.srcObject = stream;
     } else {
       if (p2pPlayer === "hls") {
-        if (videoRef.current.canPlayType("application/vnd.apple.mpegurl")) {
+        if (videoRef.current.canPlayType("application/vnd.apple.mpegurl") || !isStreamHls) {
           videoRef.current.src = stream;
         } else if (Hls.isSupported()) {
           hls.loadSource(stream);
@@ -152,7 +154,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
                 minimumTrackTintColor="#e53e3e"
                 maximumTrackTintColor="#ffffff8a"
                 thumbTintColor="#e53e3e"
-                onSlidingComplete={(seek) => handleSeek(seek)}
+                onSlidingComplete={(seek) => handleSeek(videoRef, seek)}
               />
             )}
 

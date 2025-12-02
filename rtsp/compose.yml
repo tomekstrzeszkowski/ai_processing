@@ -16,6 +16,8 @@ services:
     build: 
       context: ./broadcaster/
       dockerfile: ./docker/DockerfileViewer
+    volumes:
+      - ./broadcaster/hls_output:/app/hls_output
     ports:
       - 7080:7080
       - 2346:2345

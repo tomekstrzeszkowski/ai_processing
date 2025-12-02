@@ -87,6 +87,12 @@ func (s *Server) GetViewer() *connection.Viewer {
 	}
 	return nil
 }
+
+func (s *Server) setCORSHeaders(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+}
 func (s *Server) getVideo(w http.ResponseWriter, r *http.Request) {
 	s.setCORSHeaders(w)
 	videoName := r.PathValue("name")
@@ -121,12 +127,6 @@ func (s *Server) getVideoList(w http.ResponseWriter, r *http.Request) {
 	viewer := s.GetViewer()
 	videoList = viewer.GetVideoList(start, end)
 	json.NewEncoder(w).Encode(videoList)
-}
-
-func (s *Server) setCORSHeaders(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 }
 
 func (s *Server) serveStream(w http.ResponseWriter, r *http.Request) {
