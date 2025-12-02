@@ -10,7 +10,6 @@ import { Pressable, Text, TouchableOpacity, View } from "react-native";
 interface LiveVideoPlayerProps {
   isConnected: boolean;
   stream: MediaStream | string | null;
-  isStreamHls?: boolean;
   isLive?: boolean;
   seekMax?: number;
   seekValue?: number;
@@ -21,6 +20,8 @@ interface LiveVideoPlayerProps {
   handlePlay?: Function;
   handleLoop?: Function;
   handleFrame?: Function;
+  onLoadedMetadata?: Function;
+  onTimeUpdate?: Function;
 }
 const hls = new Hls({
   enableWorker: true,
@@ -31,7 +32,6 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
   isConnected,
   stream,
   isLive,
-  isStreamHls = false,
   seekMax = 120,
   seekValue = 0,
   isPlaying = true,
@@ -41,6 +41,8 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
   handlePlay = (video: HTMLVideoElement) => {},
   handleLoop = () => {},
   handleFrame = (isForward: boolean) => {},
+  onLoadedMetadata = () => {},
+  onTimeUpdate = () => {},
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const { p2pPlayer } = useProtocol();
@@ -55,7 +57,7 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
       videoRef.current.srcObject = stream;
     } else {
       if (p2pPlayer === "hls") {
-        if (videoRef.current.canPlayType("application/vnd.apple.mpegurl") || !isStreamHls) {
+        if (videoRef.current.canPlayType("application/vnd.apple.mpegurl") || !isLive) {
           videoRef.current.src = stream;
         } else if (Hls.isSupported()) {
           hls.loadSource(stream);
@@ -111,6 +113,8 @@ export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
           <video
             style={{ display: isConnected ? "flex" : "none", margin: "0" }}
             ref={videoRef}
+            onLoadedMetadata={onLoadedMetadata}
+            onTimeUpdate={onTimeUpdate}
             autoPlay
             playsInline
           />

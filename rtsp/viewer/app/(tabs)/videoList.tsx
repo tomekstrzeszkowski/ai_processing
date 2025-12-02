@@ -1,5 +1,3 @@
-import { VideoPlayer } from "@/components/VideoPlayer";
-// No external converter needed
 import { useP2p } from "@/app/p2pProvider";
 import { useProtocol } from "@/app/protocolProvider";
 import { useWebRtc } from "@/app/webRtcProvider";
@@ -27,11 +25,10 @@ export default function videoList() {
     setRemoteStream,
   } = useWebRtc();
   const [items, setItems] = useState([]);
-  const [videoData, setVideoData] = useState("");
   const [videoName, setVideoName] = useState("");
   const videoPlayerRef = useRef<View>(null);
   const scrollViewRef = useRef<ScrollView>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [stream, setStream] = useState<MediaStream | string | null>(null);
   const [startDate, setStartDate] = useState(() => {
     const before = new Date();
     before.setDate(before.getDate() - 7);
@@ -45,25 +42,12 @@ export default function videoList() {
   const [isLoop, setIsLoop] = useState<boolean>(false);
   const [duration, setDuration] = useState<number>(0);
 
-  useEffect(() => {
-    return () => {
-      if (videoData && videoData.startsWith("blob:")) {
-        const url = videoData;
-        setTimeout(() => {
-          try {
-            URL.revokeObjectURL(url);
-          } catch (e) {
-            console.warn("Error revoking URL:", e);
-          }
-        }, 100);
-      }
-    };
-  }, [videoData]);
+  
   useEffect(() => {
     if (!isFocused) return;
     if (!isConnected) {
       setItems([]);
-      setVideoData("");
+      setStream("");
       setVideoName("");
       return;
     }
@@ -132,15 +116,17 @@ export default function videoList() {
     setItems(items);
   };
   async function fetchVideo(nameToFetch: string) {
-    setVideoData("");
+    setStream("");
     setVideoName("");
     if (isWebRtc) {
       const stream = await offereeRef.current.fetchVideo(nameToFetch);
       if (stream) setStream(stream);
     } else {
       const { name, videoUrl } = await fetchVideoWs(nameToFetch);
-      setVideoData(videoUrl);
+      setIsPlaying(true);
+      setStream(videoUrl);
       setVideoName(name);
+      setSeek(300);
     }
     setTimeout(() => {
       scrollToVideoPlayer();
@@ -159,24 +145,36 @@ export default function videoList() {
     </View>
   );
 
-  async function handleSeek(seek: number) {
-    if (!isWebRtc) return;
-    console.log("handleSeek", seek);
-    await offereeRef.current.dataChannel?.send(
-      JSON.stringify({ type: "seek", seek }),
-    );
+  async function handleSeek(video: HTMLVideoElement, seek: number) {
+    console.log("handle Seek", seek, video)
+    if (!isWebRtc) {
+      video.current.currentTime = seek;
+      setSeek(seek);
+    } else {
+      await offereeRef.current.dataChannel?.send(
+        JSON.stringify({ type: "seek", seek }),
+      );
+    }
   }
-  async function handlePause() {
-    if (!isWebRtc) return;
-    await offereeRef.current.dataChannel?.send(
-      JSON.stringify({ type: "pause" }),
-    );
+  async function handlePause(video: HTMLVideoElement) {
+    if (!isWebRtc) {
+      video.pause();
+      setIsPlaying(false);
+    } else {
+      await offereeRef.current.dataChannel?.send(
+        JSON.stringify({ type: "pause" }),
+      );
+    }
   }
-  async function handlePlay() {
-    if (!isWebRtc) return;
-    await offereeRef.current.dataChannel?.send(
-      JSON.stringify({ type: "resume" }),
-    );
+  async function handlePlay(video: HTMLVideoElement) {
+    if (!isWebRtc) {
+      video.play();
+      setIsPlaying(true);
+    } else {
+      await offereeRef.current.dataChannel?.send(
+        JSON.stringify({ type: "resume" }),
+      );
+    }
   }
   async function handleLoop() {
     if (!isWebRtc) return;
@@ -228,29 +226,28 @@ export default function videoList() {
             {items.map((item, index) => renderVideoItem(item, index))}
           </View>
           <View ref={videoPlayerRef}>
-            {!isWebRtc && (
-              <VideoPlayer
-                videoUrl={videoData}
-                name={videoName}
-                scrollView={scrollViewRef}
-              />
-            )}
-            {isWebRtc && (
-              <LiveVideoPlayer
-                stream={stream}
-                isConnected={isConnected}
-                isLive={false}
-                seekValue={seek}
-                seekMax={duration}
-                isPlaying={isPlaying}
-                isLoop={isLoop}
-                handleSeek={handleSeek}
-                handlePause={handlePause}
-                handlePlay={handlePlay}
-                handleLoop={handleLoop}
-                handleFrame={handleFrame}
-              />
-            )}
+            <LiveVideoPlayer
+              stream={stream}
+              isConnected={isConnected}
+              isLive={false}
+              seekValue={seek}
+              seekMax={duration}
+              isPlaying={isPlaying}
+              isLoop={isLoop}
+              handleSeek={handleSeek}
+              handlePause={handlePause}
+              handlePlay={handlePlay}
+              handleLoop={handleLoop}
+              handleFrame={handleFrame}
+              onLoadedMetadata={(video) => {
+                if (isWebRtc) return;
+                setDuration(video.target.duration);
+              }}
+              onTimeUpdate={(video) => {
+                if (isWebRtc) return;
+                setSeek(video.target.currentTime);
+              }}
+            />
           </View>
         </ScrollView>
       </SafeAreaView>

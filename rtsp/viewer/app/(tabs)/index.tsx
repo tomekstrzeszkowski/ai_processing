@@ -28,7 +28,6 @@ export default function app() {
             stream={stream} 
             isConnected={isConnected} 
             isLive={true}
-            isStreamHls={true}
             isPlaying={isPlaying}
             handlePlay={(video: HTMLVideoElement) => {
               console.log('video play', video)
