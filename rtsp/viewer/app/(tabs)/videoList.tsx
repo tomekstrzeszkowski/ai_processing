@@ -1,7 +1,7 @@
 import { useP2p } from "@/app/p2pProvider";
 import { useProtocol } from "@/app/protocolProvider";
 import { useWebRtc } from "@/app/webRtcProvider";
-import { LiveVideoPlayer } from "@/components/LiveVideoPlayer";
+import { VideoPlayer } from "@/components/VideoPlayer";
 import { formatBytes } from "@/helpers/formatters";
 import { useIsFocused } from "@react-navigation/native";
 import React, { useEffect, useRef, useState } from "react";
@@ -226,7 +226,7 @@ export default function videoList() {
             {items.map((item, index) => renderVideoItem(item, index))}
           </View>
           <View ref={videoPlayerRef}>
-            <LiveVideoPlayer
+            <VideoPlayer
               stream={stream}
               isConnected={isConnected}
               isLive={false}

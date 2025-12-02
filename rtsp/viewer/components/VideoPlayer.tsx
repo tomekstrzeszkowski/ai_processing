@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { Pressable, Text, TouchableOpacity, View } from "react-native";
 
 
-interface LiveVideoPlayerProps {
+interface VideoPlayerProps {
   isConnected: boolean;
   stream: MediaStream | string | null;
   isLive?: boolean;
@@ -28,7 +28,7 @@ const hls = new Hls({
   lowLatencyMode: true,
 });
 
-export const LiveVideoPlayer: React.FC<LiveVideoPlayerProps> = ({
+export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   isConnected,
   stream,
   isLive,

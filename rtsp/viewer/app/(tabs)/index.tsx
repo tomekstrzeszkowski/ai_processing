@@ -1,5 +1,5 @@
 import { useProtocol } from "@/app/protocolProvider";
-import { LiveVideoPlayer } from "@/components/LiveVideoPlayer";
+import { VideoPlayer } from "@/components/VideoPlayer";
 import React, { useState } from "react";
 import { Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
@@ -24,7 +24,7 @@ export default function app() {
             marginBottom: "auto"
           }}
         >
-          <LiveVideoPlayer 
+          <VideoPlayer 
             stream={stream} 
             isConnected={isConnected} 
             isLive={true}
