@@ -36,13 +36,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   seekValue = 0,
   isPlaying = true,
   isLoop = false,
-  handleSeek = (video: HTMLVideoElement, seek: number) => {},
-  handlePause = (video: HTMLVideoElement) => {},
-  handlePlay = (video: HTMLVideoElement) => {},
+  handleSeek = (video: React.RefObject<HTMLVideoElement>, seek: number) => {},
+  handlePause = (video: React.RefObject<HTMLVideoElement>) => {},
+  handlePlay = (video: React.RefObject<HTMLVideoElement>) => {},
   handleLoop = () => {},
   handleFrame = (isForward: boolean) => {},
-  onLoadedMetadata = () => {},
-  onTimeUpdate = () => {},
+  onLoadedMetadata = (video: React.RefObject<HTMLVideoElement>) => {},
+  onTimeUpdate = (video: React.RefObject<HTMLVideoElement>) => {},
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const { p2pPlayer } = useProtocol();
@@ -91,11 +91,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   );
 
   function play() {
-    handlePlay(videoRef.current);
+    handlePlay(videoRef);
   }
 
   function pause() {
-    handlePause(videoRef.current);
+    handlePause(videoRef);
   }
 
   return (
@@ -113,8 +113,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           <video
             style={{ display: isConnected ? "flex" : "none", margin: "0" }}
             ref={videoRef}
-            onLoadedMetadata={onLoadedMetadata}
-            onTimeUpdate={onTimeUpdate}
+            onLoadedMetadata={() => onLoadedMetadata(videoRef)}
+            onTimeUpdate={() => onTimeUpdate(videoRef)}
             autoPlay
             playsInline
           />

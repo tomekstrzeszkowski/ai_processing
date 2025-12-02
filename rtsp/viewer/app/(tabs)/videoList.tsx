@@ -145,7 +145,7 @@ export default function videoList() {
     </View>
   );
 
-  async function handleSeek(video: HTMLVideoElement, seek: number) {
+  async function handleSeek(video: React.RefObject<HTMLVideoElement>, seek: number) {
     console.log("handle Seek", seek, video)
     if (!isWebRtc) {
       video.current.currentTime = seek;
@@ -156,9 +156,9 @@ export default function videoList() {
       );
     }
   }
-  async function handlePause(video: HTMLVideoElement) {
+  async function handlePause(video: React.RefObject<HTMLVideoElement>) {
     if (!isWebRtc) {
-      video.pause();
+      video.current.pause();
       setIsPlaying(false);
     } else {
       await offereeRef.current.dataChannel?.send(
@@ -166,9 +166,9 @@ export default function videoList() {
       );
     }
   }
-  async function handlePlay(video: HTMLVideoElement) {
+  async function handlePlay(video: React.RefObject<HTMLVideoElement>) {
     if (!isWebRtc) {
-      video.play();
+      video.current.play();
       setIsPlaying(true);
     } else {
       await offereeRef.current.dataChannel?.send(
@@ -188,6 +188,14 @@ export default function videoList() {
     await offereeRef.current.dataChannel?.send(
       JSON.stringify({ type: "frame", isForward }),
     );
+  }
+  function handleMetaData(video: React.RefObject<HTMLVideoElement>) {
+    if (isWebRtc) return;
+    setDuration(video.current.duration);
+  }
+  function handleTimeUpdate(video: React.RefObject<HTMLVideoElement>) {
+    if (isWebRtc) return;
+    setSeek(video.current.currentTime);
   }
   return (
     <SafeAreaProvider>
@@ -239,14 +247,8 @@ export default function videoList() {
               handlePlay={handlePlay}
               handleLoop={handleLoop}
               handleFrame={handleFrame}
-              onLoadedMetadata={(video) => {
-                if (isWebRtc) return;
-                setDuration(video.target.duration);
-              }}
-              onTimeUpdate={(video) => {
-                if (isWebRtc) return;
-                setSeek(video.target.currentTime);
-              }}
+              onLoadedMetadata={handleMetaData}
+              onTimeUpdate={handleTimeUpdate}
             />
           </View>
         </ScrollView>
