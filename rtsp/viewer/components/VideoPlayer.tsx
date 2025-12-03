@@ -22,6 +22,7 @@ interface VideoPlayerProps {
   handleFrame?: Function;
   onLoadedMetadata?: Function;
   onTimeUpdate?: Function;
+  onEnded?: Function;
 }
 const hls = new Hls({
   enableWorker: true,
@@ -40,15 +41,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   handlePause = (video: React.RefObject<HTMLVideoElement>) => {},
   handlePlay = (video: React.RefObject<HTMLVideoElement>) => {},
   handleLoop = () => {},
-  handleFrame = (isForward: boolean) => {},
+  handleFrame = (video: React.RefObject<HTMLVideoElement>, isForward: boolean) => {},
   onLoadedMetadata = (video: React.RefObject<HTMLVideoElement>) => {},
   onTimeUpdate = (video: React.RefObject<HTMLVideoElement>) => {},
+  onEnded = (video: React.RefObject<HTMLVideoElement>) => {},
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const { p2pPlayer } = useProtocol();
   const [isShowMenu, setIsShowMenu] = useState<boolean>(false);
 
   useEffect(() => {
+    console.log("stream", stream)
     if (!videoRef.current || !stream) {
       return;
     }
@@ -62,6 +65,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         } else if (Hls.isSupported()) {
           hls.loadSource(stream);
           hls.attachMedia(videoRef.current);
+          console.log("hls", hls)
         }
       }
     }
@@ -108,6 +112,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       <Pressable
         onHoverIn={() => setIsShowMenu(true)}
         onHoverOut={() => setIsShowMenu(false)}
+        onPress={(e) => {e.preventDefault();console.log('onPressPressable')}}
       >
         {(stream instanceof MediaStream || (stream && p2pPlayer === "hls")) && (
           <video
@@ -115,6 +120,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             ref={videoRef}
             onLoadedMetadata={() => onLoadedMetadata(videoRef)}
             onTimeUpdate={() => onTimeUpdate(videoRef)}
+            onEnded={() => onEnded(videoRef)}
             autoPlay
             playsInline
           />
@@ -147,6 +153,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               transitionDuration: "0.8s",
               transitionTimingFunction: "linear",
               transitionProperty: "opacity",
+              backdropFilter: "blur(3px)",
             }}
           >
             {!isLive && (
@@ -217,7 +224,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     style={{
                       padding: 8,
                     }}
-                    onPress={() => handleFrame(false)}
+                    onPress={() => handleFrame(videoRef, false)}
                   >
                     <Text style={{ color: "white", fontSize: 12 }}>⏮</Text>
                   </TouchableOpacity>
@@ -240,7 +247,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     style={{
                       padding: 8,
                     }}
-                    onPress={() => handleFrame(true)}
+                    onPress={() => handleFrame(videoRef, true)}
                   >
                     <Text style={{ color: "white", fontSize: 12 }}>⏭</Text>
                   </TouchableOpacity>

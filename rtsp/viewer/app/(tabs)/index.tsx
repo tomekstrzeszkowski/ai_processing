@@ -29,14 +29,12 @@ export default function app() {
             isConnected={isConnected} 
             isLive={true}
             isPlaying={isPlaying}
-            handlePlay={(video: HTMLVideoElement) => {
-              console.log('video play', video)
-              video.play()
+            handlePlay={(video: React.RefObject<HTMLVideoElement>) => {
+              video.current.play()
               setIsPlaying(true);
             }}
-            handlePause={(video: HTMLVideoElement) => {
-              console.log('video pause', video)
-              video.pause()
+            handlePause={(video: React.RefObject<HTMLVideoElement>) => {
+              video.current.pause()
               setIsPlaying(false);
             }}
           />

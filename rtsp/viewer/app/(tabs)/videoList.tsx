@@ -5,7 +5,7 @@ import { VideoPlayer } from "@/components/VideoPlayer";
 import { formatBytes } from "@/helpers/formatters";
 import { useIsFocused } from "@react-navigation/native";
 import React, { useEffect, useRef, useState } from "react";
-import { Button, Dimensions, ScrollView, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Button, Dimensions, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 const { width } = Dimensions.get("window");
@@ -26,6 +26,7 @@ export default function videoList() {
   } = useWebRtc();
   const [items, setItems] = useState([]);
   const [videoName, setVideoName] = useState("");
+  const [videoNameLoading, setVideoNameLoading] = useState("");
   const videoPlayerRef = useRef<View>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const [stream, setStream] = useState<MediaStream | string | null>(null);
@@ -89,17 +90,6 @@ export default function videoList() {
     }
   }, [isFocused, isConnected]);
 
-  const scrollToVideoPlayer = () => {
-    if (scrollViewRef.current) {
-      videoPlayerRef.current?.measureInWindow((x, y) => {
-        scrollViewRef.current?.scrollTo({
-          y,
-          animated: false,
-        });
-      });
-    }
-  };
-
   const onChangeDateRange = (startDate: string, endDate: string) => {
     setStartDate(startDate);
     setEndDate(endDate);
@@ -118,30 +108,41 @@ export default function videoList() {
   async function fetchVideo(nameToFetch: string) {
     setStream("");
     setVideoName("");
+    setVideoNameLoading(nameToFetch);
+    let stream;
     if (isWebRtc) {
-      const stream = await offereeRef.current.fetchVideo(nameToFetch);
-      if (stream) setStream(stream);
+      stream = await offereeRef.current.fetchVideo(nameToFetch);
+      setVideoName(nameToFetch);
     } else {
       const { name, videoUrl } = await fetchVideoWs(nameToFetch);
+      stream = videoUrl;
       setIsPlaying(true);
-      setStream(videoUrl);
       setVideoName(name);
-      setSeek(300);
     }
-    setTimeout(() => {
-      scrollToVideoPlayer();
-    }, 100);
+    if (stream) {
+      setStream(stream);
+    }
+    setVideoNameLoading("");
   }
 
   const renderVideoItem = (item: any, index: number) => (
     <View key={index} style={styles.gridItem}>
-      <Button
-        title={`${item.Name} (${formatBytes(item.Size)})`}
-        color="#007AFF"
-        onPress={() => {
-          fetchVideo(item.Name);
-        }}
-      />
+      {item.Name === videoNameLoading ? (
+        <View style={{backgroundColor: "#0b55a5ff", flex: 1, alignItems: "center", justifyContent: "center"}}>
+          <Text style={{alignItems: "center", justifyContent: "center", color: "#fff"}}>
+            {item.Name}
+            <ActivityIndicator color="#fff" size={10} />
+          </Text>
+        </View>
+      ): (
+        <Button
+          title={`${item.Name} (${formatBytes(item.Size)})`}
+          color={videoName !== item.Name ? "#007AFF": "#0b55a5ff"}
+          onPress={() => {
+            fetchVideo(item.Name);
+          }}
+        />
+      )}
     </View>
   );
 
@@ -149,7 +150,7 @@ export default function videoList() {
     console.log("handle Seek", seek, video)
     if (!isWebRtc) {
       video.current.currentTime = seek;
-      setSeek(seek);
+      setSeek(video.current.currentTime);
     } else {
       await offereeRef.current.dataChannel?.send(
         JSON.stringify({ type: "seek", seek }),
@@ -177,17 +178,23 @@ export default function videoList() {
     }
   }
   async function handleLoop() {
-    if (!isWebRtc) return;
-    console.log("SEND LOOP")
-    await offereeRef.current.dataChannel?.send(
-      JSON.stringify({ type: "loop" }),
-    );
+    if (!isWebRtc) {
+      setIsLoop(!isLoop);
+    } else {
+      await offereeRef.current.dataChannel?.send(
+        JSON.stringify({ type: "loop" }),
+      );
+    }
   }
-  async function handleFrame(isForward: boolean = true) {
-    if (!isWebRtc) return;
-    await offereeRef.current.dataChannel?.send(
-      JSON.stringify({ type: "frame", isForward }),
-    );
+  async function handleFrame(video: React.RefObject<HTMLVideoElement>, isForward: boolean = true) {
+    if (!isWebRtc) {
+      video.current.currentTime += 1/30 * (isForward ? 1: -1);
+      setSeek(video.current.currentTime);
+    } else {
+      await offereeRef.current.dataChannel?.send(
+        JSON.stringify({ type: "frame", isForward }),
+      );
+    }
   }
   function handleMetaData(video: React.RefObject<HTMLVideoElement>) {
     if (isWebRtc) return;
@@ -196,6 +203,17 @@ export default function videoList() {
   function handleTimeUpdate(video: React.RefObject<HTMLVideoElement>) {
     if (isWebRtc) return;
     setSeek(video.current.currentTime);
+  }
+  function onEnded(video: React.RefObject<HTMLVideoElement>) {
+    if (isWebRtc) return;
+    console.log('ended', isLoop)
+    if (!isLoop) {
+      video.current.pause();
+      setIsPlaying(false);
+    } else {
+      video.current.play();
+      setIsPlaying(true);
+    }
   }
   return (
     <SafeAreaProvider>
@@ -249,6 +267,7 @@ export default function videoList() {
               handleFrame={handleFrame}
               onLoadedMetadata={handleMetaData}
               onTimeUpdate={handleTimeUpdate}
+              onEnded={onEnded}
             />
           </View>
         </ScrollView>
