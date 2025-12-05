@@ -3,6 +3,7 @@ package watcher
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -10,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"log"
 )
 
 func SaveFrame(i int, b []byte, path string) {
@@ -225,11 +225,11 @@ func GetOldestChunkInDateDir(basePath string, skipDirs []string) string {
 	lastChunk, _ := GetOldestChunkDirName(chunkPath, skipDirs)
 	return fmt.Sprintf("%s/%s", chunkPath, lastChunk)
 }
-func IsCloseToDirSize(path string) bool {
+func IsCloseToDirSize(path string, saveChunkSize int, saveDirMaxSize int) bool {
 	currentSize, _ := DirSize(path)
 	limit := int64(saveDirMaxSize - (saveChunkSize * 2))
 	if limit < 0 {
-		limit = saveDirMaxSize
+		limit = int64(saveDirMaxSize)
 	}
 	return currentSize >= limit
 }
@@ -252,8 +252,8 @@ func RemoveChunk(path string, skipDirs []string) {
 	}
 }
 
-func RemoveOldestDir(savePath string, skipDirs []string) bool {
-	if !IsCloseToDirSize(savePath) {
+func RemoveOldestDir(savePath string, skipDirs []string, saveChunkSize int, saveDirMaxSize int) bool {
+	if !IsCloseToDirSize(savePath, saveChunkSize, saveDirMaxSize) {
 		return false
 	}
 	fmt.Printf("Removing oldest chunk: %s\n", GetOldestChunkInDateDir(savePath, skipDirs))
@@ -261,16 +261,16 @@ func RemoveOldestDir(savePath string, skipDirs []string) bool {
 	RemoveChunk(savePath, skipDirs)
 	return true
 }
-func IsCloseToVideoSize(path string, extensions []string) bool {
+func IsCloseToVideoSize(path string, extensions []string, convertedVideoSpace int, saveChunkSize int) bool {
 	size, _ := FileSizeByExtension(path, extensions)
 	limit := int64(convertedVideoSpace - (saveChunkSize * 2))
 	if limit < 0 {
-		limit = convertedVideoSpace
+		limit = int64(convertedVideoSpace)
 	}
 	return size >= limit
 }
-func RemoveOldestVideo(path string, extensions []string, skipDates []string) bool {
-	isClose := IsCloseToVideoSize(path, extensions)
+func RemoveOldestVideo(path string, extensions []string, skipDates []string, convertedVideoSpace int, saveChunkSize int) bool {
+	isClose := IsCloseToVideoSize(path, extensions, convertedVideoSpace, saveChunkSize)
 	if !isClose {
 		return false
 	}

@@ -23,6 +23,7 @@ type Converter struct {
 	watchingDirs []string
 	mux          sync.RWMutex
 	Framerate    *float64
+	Config       Config
 }
 
 func NewConverter(saveVideoPath string) (*Converter, error) {
@@ -37,6 +38,7 @@ func NewConverter(saveVideoPath string) (*Converter, error) {
 		hasJob:       false,
 		watchingDirs: []string{saveVideoPath},
 		Framerate:    &frameRate,
+		Config:       NewConfig(),
 	}
 	c.AddToWatch(saveVideoPath)
 	dateDirs, _ := GetDateDirNames(saveVideoPath, []string{})
@@ -61,8 +63,8 @@ func (c *Converter) Watch() {
 					if !c.hasJob {
 						skipDates := c.GetSkipDates()
 						for {
-							RemoveOldestDirs(c.savePath, skipDates)
-							RemoveOldestVideoFiles(c.savePath, skipDates)
+							RemoveOldestDirs(c.savePath, skipDates, c.Config.SaveChunkSize, c.Config.SaveDirMaxSize)
+							RemoveOldestVideoFiles(c.savePath, skipDates, c.Config.ConvertedVideoSpace, c.Config.SaveChunkSize)
 							c.hasJob = c.convertLastChunkToVideo(c.savePath)
 							if !c.hasJob {
 								break
@@ -91,20 +93,20 @@ func (c *Converter) AddToWatch(path string) {
 func (c *Converter) GetSkipDates() []string {
 	now := time.Now()
 	skipDates := []string{now.Format("2006-01-02")}
-	for i := 1; i <= ConvertFramesBeforeDays; i++ {
+	for i := 1; i <= c.Config.ConvertFramesBeforeDays; i++ {
 		pastDate := now.AddDate(0, 0, -i) // Subtract i days
 		skipDates = append(skipDates, pastDate.Format("2006-01-02"))
 	}
 	return skipDates
 }
 
-func RemoveOldestDirs(savePath string, skipDirs []string) {
-	for RemoveOldestDir(savePath, skipDirs) {
+func RemoveOldestDirs(savePath string, skipDirs []string, chunkSize int, saveDirMaxSize int) {
+	for RemoveOldestDir(savePath, skipDirs, chunkSize, saveDirMaxSize) {
 	}
 }
 
-func RemoveOldestVideoFiles(savePath string, skipDates []string) {
-	for RemoveOldestVideo(savePath, []string{".mp4"}, skipDates) {
+func RemoveOldestVideoFiles(savePath string, skipDates []string, convertedVideoSpace int, saveChunkSize int) {
+	for RemoveOldestVideo(savePath, []string{".mp4"}, skipDates, convertedVideoSpace, saveChunkSize) {
 	}
 }
 
@@ -192,8 +194,8 @@ func (c *Converter) RunUntilComplete() {
 	c.mux.Lock()
 	defer c.mux.Unlock()
 	for {
-		RemoveOldestDirs(c.savePath, skipDates)
-		RemoveOldestVideoFiles(c.savePath, skipDates)
+		RemoveOldestDirs(c.savePath, skipDates, c.Config.SaveChunkSize, c.Config.SaveDirMaxSize)
+		RemoveOldestVideoFiles(c.savePath, skipDates, c.Config.ConvertedVideoSpace, c.Config.SaveChunkSize)
 		c.hasJob = c.convertLastChunkToVideo(c.savePath)
 		if !c.hasJob {
 			break

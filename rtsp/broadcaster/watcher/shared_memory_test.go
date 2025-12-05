@@ -26,6 +26,9 @@ func (tcp TestConfigProvider) GetShowWhatWasBefore() int {
 func (tcp TestConfigProvider) GetShowWhatWasAfter() int {
 	return tcp.after
 }
+func (tcp TestConfigProvider) GetSaveChunkSize() int {
+	return 1024
+}
 func createFrameWithDelay(buffer []byte, detected int, shmName string) {
 	header := make([]byte, 5)
 	header[0] = byte(detected)

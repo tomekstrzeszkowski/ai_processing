@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 
+	"log"
+	"time"
+
 	golog "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"strzcam.com/broadcaster/connection"
 	"strzcam.com/broadcaster/watcher"
-	"log"
-	"time"
 )
 
 func main() {
@@ -37,19 +38,19 @@ func main() {
 	rendezVous, _ := connection.GetRendezVousCid(connection.RendezVous)
 	announced := false
 	for i := range 10 {
-	    if connection.AnnounceDHT(ctx, kademliaDHT, rendezVous) {
-	        announced = true
-	        break
-	    }
-	    if i < 9 {
-	    	// Exponential-ish backoff
-	    	log.Printf("Failed to make initial DHT announcement attempt %d", i)
-	        time.Sleep(time.Second * time.Duration((i+1)*i))
-	    }
+		if connection.AnnounceDHT(ctx, kademliaDHT, rendezVous) {
+			announced = true
+			break
+		}
+		if i < 9 {
+			// Exponential-ish backoff
+			log.Printf("Failed to make initial DHT announcement attempt %d", i)
+			time.Sleep(time.Second * time.Duration((i+1)*i))
+		}
 	}
 
 	if !announced {
-	    log.Printf("Failed to make initial DHT announcement after 10 attempts")
+		log.Printf("Failed to make initial DHT announcement after 10 attempts")
 	} else {
 		log.Printf("DHT announced!")
 	}

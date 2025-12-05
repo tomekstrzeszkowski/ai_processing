@@ -19,7 +19,7 @@ func main() {
 	server.PrepareEndpoints()
 	go func() {
 		for frame := range creator.SharedMemoryReceiver.Frames {
-			server.BroadcastFrame(frame)
+			server.BroadcastFrame([][]byte{frame})
 		}
 	}()
 	server.Start()

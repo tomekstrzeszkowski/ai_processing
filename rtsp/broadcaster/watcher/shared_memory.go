@@ -16,18 +16,28 @@ type ConfigProvider interface {
 	GetSavePath() string
 	GetShowWhatWasBefore() int
 	GetShowWhatWasAfter() int
+	GetSaveChunkSize() int
 }
 
-type DefaultConfigProvider struct{}
+type DefaultConfigProvider struct {
+	config Config
+}
+
+func NewDefaultConfigProvider() DefaultConfigProvider {
+	return DefaultConfigProvider{config: NewConfig()}
+}
 
 func (d DefaultConfigProvider) GetSavePath() string {
 	return SavePath
 }
 func (d DefaultConfigProvider) GetShowWhatWasBefore() int {
-	return showWhatWasBefore
+	return d.config.ShowWhatWasBefore
 }
 func (d DefaultConfigProvider) GetShowWhatWasAfter() int {
-	return showWhatWasAfter
+	return d.config.ShowWhatWasAfter
+}
+func (d DefaultConfigProvider) GetSaveChunkSize() int {
+	return d.config.SaveChunkSize
 }
 
 type SignificantFrame struct {
@@ -76,7 +86,7 @@ func NewSharedMemoryReceiverWithConfig(shmName string, configProvider ConfigProv
 }
 
 func NewSharedMemoryReceiver(shmName string) (*SharedMemoryReceiver, error) {
-	return NewSharedMemoryReceiverWithConfig(shmName, DefaultConfigProvider{})
+	return NewSharedMemoryReceiverWithConfig(shmName, NewDefaultConfigProvider())
 }
 
 func (smr *SharedMemoryReceiver) ReadFrameFromShm() ([]byte, int, error) {
@@ -241,7 +251,7 @@ func (smr *SharedMemoryReceiver) Close() {
 }
 func (smr *SharedMemoryReceiver) SaveFrameForLater() {
 	for detectedFrame := range smr.SignificantFrames {
-		i, path, err := TouchDirAndGetIndex(smr.GetBaseDir(), saveChunkSize)
+		i, path, err := TouchDirAndGetIndex(smr.GetBaseDir(), int64(smr.configProvider.GetSaveChunkSize()))
 		if err != nil {
 			log.Printf("Can not save frame for later! %v", err)
 			return

@@ -115,12 +115,6 @@ func (s *Server) getVideoList(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	startParam := r.URL.Query().Get("start")
 	endParam := r.URL.Query().Get("end")
-	if startParam == "" {
-		startParam = "2011-11-10"
-	}
-	if endParam == "" {
-		endParam = "2011-11-11"
-	}
 	start, _ := time.Parse("2006-01-02", startParam)
 	end, _ := time.Parse("2006-01-02", endParam)
 	var videoList []video.Video
@@ -222,6 +216,7 @@ func (s *Server) PrepareEndpoints() {
 <body>
     <h1>Live Video Stream` + fmt.Sprintf("%d", s.port) + `</h1>
 	<a href="/stream">Stream</a>
+	<a href="/hls/stream.m3u8">HLS</a>
 </body>
 </html>`
 		w.Header().Set("Content-Type", "text/html")
