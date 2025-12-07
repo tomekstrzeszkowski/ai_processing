@@ -44,3 +44,46 @@ func TestIsCloseToVideoSize(t *testing.T) {
 		}
 	})
 }
+func TestCountContentInDir(t *testing.T) {
+	t.Run("count chunks in date dir", func(t *testing.T) {
+		baseDir := t.TempDir()
+		tempDir := filepath.Join(baseDir, "2025-01-01")
+		if err := os.MkdirAll(tempDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		testFile := filepath.Join(tempDir, "test.jpg")
+		if err := os.WriteFile(testFile, make([]byte, 1), 0644); err != nil {
+			t.Fatalf("Failed to create test file: %v", err)
+		}
+		testFile2 := filepath.Join(tempDir, "test2.jpg")
+		if err := os.WriteFile(testFile2, make([]byte, 1), 0644); err != nil {
+			t.Fatalf("Failed to create test file: %v", err)
+		}
+		result := CountChunksInDateDir(baseDir, []string{})
+		if result != 2 {
+			t.Errorf("Expected 2 chunks, got %d", result)
+		}
+	})
+}
+func TestDirIndex(t *testing.T) {
+	t.Run("increase index", func(t *testing.T) {
+		baseDir := t.TempDir()
+		tempDir := filepath.Join(baseDir, "2025-01-01")
+		if err := os.MkdirAll(tempDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		testFile := filepath.Join(tempDir, "test.jpg")
+		if err := os.WriteFile(testFile, make([]byte, 5), 0644); err != nil {
+			t.Fatalf("Failed to create test file: %v", err)
+		}
+		CreateNewDirIndex(tempDir)
+		index, path, _ := TouchDirAndGetIndex(tempDir, 4)
+		if index != 0 {
+			t.Errorf("Expected index 2, got %d", index)
+		}
+		expected := filepath.Join(tempDir, "2")
+		if path != expected {
+			t.Errorf("Expected path %s, got %s", expected, path)
+		}
+	})
+}
