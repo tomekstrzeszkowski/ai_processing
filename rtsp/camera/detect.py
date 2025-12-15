@@ -3,8 +3,8 @@ import numpy as np
 import cv2
 import os
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
-from yolo_object import YoloObject, YOLO_MODEL_NAME_TO_SCALE_TO_ORIGINAL
-from detector import Detector
+from detector.const import YoloObject, YOLO_MODEL_NAME_TO_SCALE_TO_ORIGINAL
+from detector.detector import Detector
 from motion import MotionDetector
 from face import FaceDetector
 from fps import FpsMonitor

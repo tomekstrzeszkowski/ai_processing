@@ -83,7 +83,13 @@ class YoloObject(IntEnum):
     HAIR_DRIER = 78
     TOOTHBRUSH = 79
 
+
 YOLO_MODEL_NAME_TO_SCALE_TO_ORIGINAL = {
-    "./yolo11n.onnx": 1,
-    "./yolov8n.onnx": 640,
+    "./yolo11n.onnx": (1, 640),
+    "./yolov8n.onnx": (640, 640),
+    "./yolo5n.onnx": (1, 640),
+    "./yolov8n.onnx": (1, 640),
+    "./yolo8n_int8.onnx": (1, 416),
+    "./yolov8n320_int8.onnx": (1, 320),
 }
+ACTIVE_MODEL = list(YOLO_MODEL_NAME_TO_SCALE_TO_ORIGINAL)[-1]

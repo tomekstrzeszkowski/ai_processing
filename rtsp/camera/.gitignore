@@ -1,5 +1,6 @@
-yolov8n.onnx
-yolo11n.onnx
+yolo11*
+yolov8*
+yolo5*
 venv/*
 *.py[c|o]
 *_processed.mp4

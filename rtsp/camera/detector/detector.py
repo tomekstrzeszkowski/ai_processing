@@ -1,56 +1,37 @@
+import onnxruntime as ort
+import numpy as np
 import cv2
 from functools import cached_property
-import numpy as np
-from yolo_object import YoloObject, YOLO_MODEL_NAME_TO_SCALE_TO_ORIGINAL
-
-
-YOLO_MODEL_NAME = "./yolo11n.onnx"
-
-
-def calculate_iou(box1, box2):
-    """
-    Calculate Intersection over Union (IoU) of two bounding boxes
-    Box format: [x0, y0, width, height]
-    """
-    x1, y1, w1, h1 = box1
-    x2, y2, w2, h2 = box2
-    
-    # Calculate intersection rectangle
-    x_left = max(x1, x2)
-    y_top = max(y1, y2)
-    x_right = min(x1 + w1, x2 + w2)
-    y_bottom = min(y1 + h1, y2 + h2)
-    
-    if x_right < x_left or y_bottom < y_top:
-        return 0.0
-    
-    # Calculate intersection area
-    intersection_area = (x_right - x_left) * (y_bottom - y_top)
-    
-    # Calculate union area
-    box1_area = w1 * h1
-    box2_area = w2 * h2
-    union_area = box1_area + box2_area - intersection_area
-    
-    if union_area == 0:
-        return 0.0
-    
-    return intersection_area / union_area
+from detector.const import YoloObject, YOLO_MODEL_NAME_TO_SCALE_TO_ORIGINAL, ACTIVE_MODEL
+from detector.utils import calculate_iou
 
 
 class Detector:
-    yolo_model_name = "./yolo11n.onnx"
+    yolo_model_name = ACTIVE_MODEL
     detect_only = (YoloObject.PERSON, YoloObject.CAR)
     detect_only_yolo_class_id = [yolo.value for yolo in detect_only]
     yolo_class_id_to_verbose = {yolo.value: yolo.name.lower() for yolo in detect_only}
 
     @property
     def _resize(self):
-        return YOLO_MODEL_NAME_TO_SCALE_TO_ORIGINAL.get(self.yolo_model_name, 1)
+        return YOLO_MODEL_NAME_TO_SCALE_TO_ORIGINAL.get(self.yolo_model_name, 1)[0]
+
+    @property
+    def _export_size(self):
+        return YOLO_MODEL_NAME_TO_SCALE_TO_ORIGINAL.get(self.yolo_model_name, 1)[1]
+
 
     @cached_property
     def model(self):
-        return cv2.dnn.readNetFromONNX(self.yolo_model_name)
+        return ort.InferenceSession(
+            self.yolo_model_name,
+            providers=['CPUExecutionProvider']
+        )
+
+    @cached_property
+    def input_name(self):
+        """Get the input tensor name"""
+        return self.model.get_inputs()[0].name
 
     def _scale_input(self, original_image):
         [height, width, _] = original_image.shape
@@ -58,33 +39,49 @@ class Detector:
         image = np.zeros((length, length, 3), np.uint8)
         image[0:height, 0:width] = original_image
 
-        # Calculate scale factor
-        size = 640
+        size = self._export_size
         scale = length / size
+        
         blob = cv2.dnn.blobFromImage(
             image, scalefactor=1 / 255, size=(size, size), swapRB=True
         )
-        self.model.setInput(blob)
-        outputs = self.model.forward()
-        outputs = np.array([cv2.transpose(outputs[0])])
+        outputs = self.model.run(None, {self.input_name: blob})
+        outputs = np.array(outputs[0])
+        if len(outputs.shape) == 3 and outputs.shape[1] < outputs.shape[2]:
+            outputs = np.transpose(outputs, (0, 2, 1))
+        
         return outputs, scale
 
     def detect_yolo_all(self, original_image):
+        """Detect all objects without filtering duplicates"""
         outputs, scale = self._scale_input(original_image)
-        rows = outputs.shape[1]
+        
+        # outputs shape: [1, N, 85] for YOLOv5 or [1, N, 84] for YOLOv8/v11
+        batch_size, num_detections, num_features = outputs.shape
 
-        # Iterate through output to collect bounding boxes, confidence scores, and class IDs
-        for i in range(rows):
-            classes_scores = outputs[0][i][4:]
-            (minScore, maxScore, minClassLoc, (x, maxClassIndex)) = cv2.minMaxLoc(
-                classes_scores
-            )
+        # Iterate through detections
+        for i in range(num_detections):
+            detection = outputs[0][i]
+            if num_features == 85:  # YOLOv5 format
+                center_x_norm = detection[0]
+                center_y_norm = detection[1]
+                width_norm = detection[2]
+                height_norm = detection[3]
+                objectness = detection[4]
+                classes_scores = detection[5:]
+                max_class_score = np.max(classes_scores)
+                maxScore = objectness * max_class_score
+                maxClassIndex = int(np.argmax(classes_scores))
+            else:  # YOLOv8/v11 format (84 values)
+                center_x_norm = detection[0]
+                center_y_norm = detection[1]
+                width_norm = detection[2]
+                height_norm = detection[3]
+                classes_scores = detection[4:]
+                maxScore = np.max(classes_scores)
+                maxClassIndex = int(np.argmax(classes_scores))
+            
             if maxScore >= 0.34 and maxClassIndex in self.detect_only_yolo_class_id:
-                center_x_norm = outputs[0][i][0]  # normalized center x (0-1)
-                center_y_norm = outputs[0][i][1]  # normalized center y (0-1)
-                width_norm = outputs[0][i][2]     # normalized width (0-1)
-                height_norm = outputs[0][i][3]    # normalized height (0-1)
-                
                 # Convert to pixel coordinates in the 640x640 space, then scale to original
                 center_x = center_x_norm * self._resize * scale
                 center_y = center_y_norm * self._resize * scale
@@ -96,7 +93,7 @@ class Detector:
                 y0 = int(center_y - (box_height / 2))
                 w = int(box_width)
                 h = int(box_height)
-                yield [x0, y0, w, h, maxClassIndex, maxScore]
+                yield [x0, y0, w, h, maxClassIndex, float(maxScore)]
 
     def detect_yolo_with_nms(self, original_image, nms_threshold=0.4):
         """
@@ -106,25 +103,39 @@ class Detector:
         boxes.
         """
         outputs, scale = self._scale_input(original_image)
-        rows = outputs.shape[1]
+        
+        batch_size, num_detections, num_features = outputs.shape
 
         # Collect all detections
         boxes = []
         confidences = []
         class_ids = []
 
-        # Iterate through output to collect bounding boxes, confidence scores, and class IDs
-        for i in range(rows):
-            classes_scores = outputs[0][i][4:]
-            (minScore, maxScore, minClassLoc, (x, maxClassIndex)) = cv2.minMaxLoc(
-                classes_scores
-            )
+        # Iterate through detections
+        for i in range(num_detections):
+            detection = outputs[0][i]
+            
+            # Handle both YOLOv5 (with objectness) and YOLOv8/v11 (without objectness)
+            if num_features == 85:  # YOLOv5 format
+                center_x_norm = detection[0]
+                center_y_norm = detection[1]
+                width_norm = detection[2]
+                height_norm = detection[3]
+                objectness = detection[4]
+                classes_scores = detection[5:]
+                max_class_score = np.max(classes_scores)
+                maxScore = objectness * max_class_score
+                maxClassIndex = int(np.argmax(classes_scores))
+            else:  # YOLOv8/v11 format (84 values)
+                center_x_norm = detection[0]
+                center_y_norm = detection[1]
+                width_norm = detection[2]
+                height_norm = detection[3]
+                classes_scores = detection[4:]
+                maxScore = np.max(classes_scores)
+                maxClassIndex = int(np.argmax(classes_scores))
+            
             if maxScore >= 0.3 and maxClassIndex in self.detect_only_yolo_class_id:
-                center_x_norm = outputs[0][i][0]  # normalized center x (0-1)
-                center_y_norm = outputs[0][i][1]  # normalized center y (0-1)
-                width_norm = outputs[0][i][2]     # normalized width (0-1)
-                height_norm = outputs[0][i][3]    # normalized height (0-1)
-                
                 # Convert to pixel coordinates in the 640x640 space, then scale to original
                 center_x = center_x_norm * self._resize * scale
                 center_y = center_y_norm * self._resize * scale
@@ -142,33 +153,48 @@ class Detector:
                 class_ids.append(maxClassIndex)
 
         # Apply Non-Maximum Suppression
-        indices = cv2.dnn.NMSBoxes(boxes, confidences, 0.3, nms_threshold)
-        
-        if len(indices) > 0:
-            for i in indices.flatten():
-                x0, y0, w, h = boxes[i]
-                yield [x0, y0, w, h, class_ids[i], confidences[i]]
-
+        if len(boxes) > 0:
+            indices = cv2.dnn.NMSBoxes(boxes, confidences, 0.3, nms_threshold)
+            
+            if len(indices) > 0:
+                for i in indices.flatten():
+                    x0, y0, w, h = boxes[i]
+                    yield [x0, y0, w, h, class_ids[i], confidences[i]]
 
     def detect_yolo_with_averaging(self, original_image, iou_threshold=0.5):
+        """Average overlapping detections for smoother results"""
         outputs, scale = self._scale_input(original_image)
-        rows = outputs.shape[1]
+        
+        batch_size, num_detections, num_features = outputs.shape
 
         # Collect all detections
         detections = []
 
-        # Iterate through output to collect bounding boxes, confidence scores, and class IDs
-        for i in range(rows):
-            classes_scores = outputs[0][i][4:]
-            (minScore, maxScore, minClassLoc, (x, maxClassIndex)) = cv2.minMaxLoc(
-                classes_scores
-            )
+        # Iterate through detections
+        for i in range(num_detections):
+            detection = outputs[0][i]
+            
+            # Handle both YOLOv5 (with objectness) and YOLOv8/v11 (without objectness)
+            if num_features == 85:  # YOLOv5 format
+                center_x_norm = detection[0]
+                center_y_norm = detection[1]
+                width_norm = detection[2]
+                height_norm = detection[3]
+                objectness = detection[4]
+                classes_scores = detection[5:]
+                max_class_score = np.max(classes_scores)
+                maxScore = objectness * max_class_score
+                maxClassIndex = int(np.argmax(classes_scores))
+            else:  # YOLOv8/v11 format (84 values)
+                center_x_norm = detection[0]
+                center_y_norm = detection[1]
+                width_norm = detection[2]
+                height_norm = detection[3]
+                classes_scores = detection[4:]
+                maxScore = np.max(classes_scores)
+                maxClassIndex = int(np.argmax(classes_scores))
+            
             if maxScore >= 0.3 and maxClassIndex in self.detect_only_yolo_class_id:
-                center_x_norm = outputs[0][i][0]  # normalized center x (0-1)
-                center_y_norm = outputs[0][i][1]  # normalized center y (0-1)
-                width_norm = outputs[0][i][2]     # normalized width (0-1)
-                height_norm = outputs[0][i][3]    # normalized height (0-1)
-                
                 # Convert to pixel coordinates in the 640x640 space, then scale to original
                 center_x = center_x_norm * self._resize * scale
                 center_y = center_y_norm * self._resize * scale
@@ -184,7 +210,7 @@ class Detector:
                 detections.append({
                     'box': [x0, y0, w, h],
                     'class_id': maxClassIndex,
-                    'confidence': maxScore,
+                    'confidence': float(maxScore),
                     'center_x': center_x,
                     'center_y': center_y
                 })
@@ -240,26 +266,40 @@ class Detector:
                     x0, y0, w, h = detection['box']
                     yield [x0, y0, w, h, class_id, detection['confidence']]
 
-
     def detect_yolo_with_largest_box(self, original_image, iou_threshold=0.5):
+        """Keep only the largest box among overlapping detections"""
         outputs, scale = self._scale_input(original_image)
-        rows = outputs.shape[1]
+        
+        batch_size, num_detections, num_features = outputs.shape
 
         # Collect all detections
         detections = []
 
-        # Iterate through output to collect bounding boxes, confidence scores, and class IDs
-        for i in range(rows):
-            classes_scores = outputs[0][i][4:]
-            (minScore, maxScore, minClassLoc, (x, maxClassIndex)) = cv2.minMaxLoc(
-                classes_scores
-            )
+        # Iterate through detections
+        for i in range(num_detections):
+            detection = outputs[0][i]
+            
+            # Handle both YOLOv5 (with objectness) and YOLOv8/v11 (without objectness)
+            if num_features == 85:  # YOLOv5 format
+                center_x_norm = detection[0]
+                center_y_norm = detection[1]
+                width_norm = detection[2]
+                height_norm = detection[3]
+                objectness = detection[4]
+                classes_scores = detection[5:]
+                max_class_score = np.max(classes_scores)
+                maxScore = objectness * max_class_score
+                maxClassIndex = int(np.argmax(classes_scores))
+            else:  # YOLOv8/v11 format (84 values)
+                center_x_norm = detection[0]
+                center_y_norm = detection[1]
+                width_norm = detection[2]
+                height_norm = detection[3]
+                classes_scores = detection[4:]
+                maxScore = np.max(classes_scores)
+                maxClassIndex = int(np.argmax(classes_scores))
+            
             if maxScore >= 0.3 and maxClassIndex in self.detect_only_yolo_class_id:
-                center_x_norm = outputs[0][i][0]  # normalized center x (0-1)
-                center_y_norm = outputs[0][i][1]  # normalized center y (0-1)
-                width_norm = outputs[0][i][2]     # normalized width (0-1)
-                height_norm = outputs[0][i][3]    # normalized height (0-1)
-                
                 # Convert to pixel coordinates in the 640x640 space, then scale to original
                 center_x = center_x_norm * self._resize * scale
                 center_y = center_y_norm * self._resize * scale
@@ -275,7 +315,7 @@ class Detector:
                 detections.append({
                     'box': [x0, y0, w, h],
                     'class_id': maxClassIndex,
-                    'confidence': maxScore,
+                    'confidence': float(maxScore),
                     'area': w * h
                 })
 
@@ -319,4 +359,3 @@ class Detector:
                     # Single detection, return as is
                     x0, y0, w, h = detection['box']
                     yield [x0, y0, w, h, class_id, detection['confidence']]
-

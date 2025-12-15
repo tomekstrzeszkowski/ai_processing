@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 import time
 import re
-from detector import Detector
+from detector.detector import Detector
 from motion import MotionDetector
 from dotenv import load_dotenv
 from saver import write_frame_to_shared_memory, VideoSaver
