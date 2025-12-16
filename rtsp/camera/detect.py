@@ -44,13 +44,10 @@ if __name__ == "__main__":
     yolo_object_to_verbose = {y.value: y.name for y in YoloObject}
     type_detected = -1
     fps = FpsMonitor()
-    fps.start()
-    frame_count = 0
     while frames_to_read := True:
         frames_to_read, frame = video.read()
         if not frames_to_read:
             break
-        fps.update_frame_count()
         frame = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         frame_array = np.array(frame)
         # scale for faster detections
@@ -59,18 +56,16 @@ if __name__ == "__main__":
         )
         draw = ImageDraw.Draw(frame)
         # detect
-        motion_detected = motion.detected_long(frame_array)
+        should_process = fps.should_process()
+        cached_detection = None if should_process else detector.last_detection
+        motion_detected = motion.detected_long(frame_array) if should_process else False
+        if not should_process:
+            print(cached_detection)
         drawer = Drawer(frame_array)
-        if motion_detected:
+        if motion_detected or cached_detection:
             type_detected = -1
-            for (
-                x0,
-                y0,
-                w,
-                h,
-                type_detected,
-                scale,
-            ) in detector.detect_yolo_with_largest_box(frame_array):
+            detection = cached_detection or detector.detect_yolo_with_largest_box(frame_array)
+            for (x0, y0, w, h, type_detected, scale) in detection:
                 drawer.rectangle(yolo_object_to_verbose[type_detected], x0, y0, w, h)
         drawer.label(motion_detected)
         frame_draw = drawer.get_from_array()
@@ -86,7 +81,6 @@ if __name__ == "__main__":
                 frame_draw.paste(blurred, mask=mask_box)
                 draw.rectangle(face.tolist(), outline="red")
         frame_bgr = cv2.cvtColor(np.array(frame_draw), cv2.COLOR_RGB2BGR)
-        fps.mark_processed()
         if SAVE_TO_SHM:
             success, buffer = cv2.imencode(".jpg", frame_bgr)
             if success:
@@ -94,8 +88,5 @@ if __name__ == "__main__":
                     buffer, type_detected, shm_name=f"video_frame"
                 )
         video_tracked.add_frame(cv2.resize(frame_bgr, (width, height)))
-        frame_count += 1
-        if fps.update_elapsed_time():
-            print(f"{fps.get_current()=:.2f} -> {frame_count}/{length}")
     video.release()
     video_tracked.save()

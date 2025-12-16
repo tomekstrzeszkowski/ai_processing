@@ -11,6 +11,7 @@ class Detector:
     detect_only = (YoloObject.PERSON, YoloObject.CAR)
     detect_only_yolo_class_id = [yolo.value for yolo in detect_only]
     yolo_class_id_to_verbose = {yolo.value: yolo.name.lower() for yolo in detect_only}
+    last_detection = None
 
     @property
     def _resize(self):
@@ -58,6 +59,7 @@ class Detector:
         
         # outputs shape: [1, N, 85] for YOLOv5 or [1, N, 84] for YOLOv8/v11
         batch_size, num_detections, num_features = outputs.shape
+        self.last_detection = []
 
         # Iterate through detections
         for i in range(num_detections):
@@ -93,7 +95,9 @@ class Detector:
                 y0 = int(center_y - (box_height / 2))
                 w = int(box_width)
                 h = int(box_height)
-                yield [x0, y0, w, h, maxClassIndex, float(maxScore)]
+                last_result = [x0, y0, w, h, maxClassIndex, float(maxScore)]
+                self.last_detection.append(last_result)
+                yield last_result
 
     def detect_yolo_with_nms(self, original_image, nms_threshold=0.4):
         """
@@ -110,6 +114,7 @@ class Detector:
         boxes = []
         confidences = []
         class_ids = []
+        self.last_detection = []
 
         # Iterate through detections
         for i in range(num_detections):
@@ -159,7 +164,9 @@ class Detector:
             if len(indices) > 0:
                 for i in indices.flatten():
                     x0, y0, w, h = boxes[i]
-                    yield [x0, y0, w, h, class_ids[i], confidences[i]]
+                    last_result = [x0, y0, w, h, class_ids[i], confidences[i]]
+                    self.last_detection.append(last_result)
+                    yield last_result
 
     def detect_yolo_with_averaging(self, original_image, iou_threshold=0.5):
         """Average overlapping detections for smoother results"""
@@ -169,6 +176,7 @@ class Detector:
 
         # Collect all detections
         detections = []
+        self.last_detection = []
 
         # Iterate through detections
         for i in range(num_detections):
@@ -259,12 +267,15 @@ class Detector:
                     # Convert back to top-left coordinates
                     x0 = int(avg_center_x - w / 2)
                     y0 = int(avg_center_y - h / 2)
-                    
-                    yield [x0, y0, w, h, class_id, max_confidence]
+                    last_result = [x0, y0, w, h, class_id, max_confidence]
+                    self.last_detection.append(last_result)
+                    yield last_result
                 else:
                     # Single detection, return as is
                     x0, y0, w, h = detection['box']
-                    yield [x0, y0, w, h, class_id, detection['confidence']]
+                    last_result = [x0, y0, w, h, class_id, detection['confidence']]
+                    self.last_detection.append(last_result)
+                    yield last_result
 
     def detect_yolo_with_largest_box(self, original_image, iou_threshold=0.5):
         """Keep only the largest box among overlapping detections"""
@@ -274,6 +285,7 @@ class Detector:
 
         # Collect all detections
         detections = []
+        self.last_detection = []
 
         # Iterate through detections
         for i in range(num_detections):
@@ -354,8 +366,12 @@ class Detector:
                     # Sort by area (descending), then by confidence (descending)
                     best_detection = max(overlapping, key=lambda d: (d['area'], d['confidence']))
                     x0, y0, w, h = best_detection['box']
-                    yield [x0, y0, w, h, class_id, best_detection['confidence']]
+                    last_result = [x0, y0, w, h, class_id, best_detection['confidence']]
+                    self.last_detection.append(last_result)
+                    yield last_result
                 else:
                     # Single detection, return as is
                     x0, y0, w, h = detection['box']
-                    yield [x0, y0, w, h, class_id, detection['confidence']]
+                    last_result = [x0, y0, w, h, class_id, detection['confidence']]
+                    self.last_detection.append(last_result)
+                    yield last_result

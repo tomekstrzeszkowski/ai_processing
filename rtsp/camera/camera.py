@@ -15,16 +15,16 @@ load_dotenv()
 SHOW_NOW_LABEL = bool(os.getenv("SHOW_NOW_LABEL", ""))
 
 
-def process_frame(frame, detector, is_motion_detected):
+def process_frame(frame, detector, is_motion_detected, cached_detection=None):
     type_detected = -1
     drawer = Drawer(frame)
-    if is_motion_detected:
+    if is_motion_detected or cached_detection:
         height, width = frame.shape[:2]
         scaled_frame = cv2.resize(frame, (int(width * 0.99), int(height * 0.99)))
-        for x0, y0, w, h, type_detected, scale in detector.detect_yolo_with_nms(
-            scaled_frame
-        ):
+        detection = cached_detection or detector.detect_yolo_with_nms(scaled_frame)
+        for x0, y0, w, h, type_detected, scale in detection:
             drawer.rectangle(detector.yolo_class_id_to_verbose[type_detected], x0, y0, w, h)
+
     drawer.label(is_motion_detected)
     return frame, type_detected
 
@@ -69,23 +69,22 @@ def main():
     print(f"Camera properties: {width=}x{height=} @ {camera_fps=}")
     has_detected = False
     fps = FpsMonitor(camera_fps)
-    fps.start()
     try:
         while True:
             frames_to_read, camera_frame = video.read()
             if not frames_to_read:
                 print("Failed to grab frame")
                 continue
-            fps.update_frame_count()
-            if fps.is_skip_frame():
+            if not fps.should_process():
+                frame, type_detected = process_frame(
+                    camera_frame, detector, False, detector.last_detection
+                )
                 continue
             is_motion_detected = motion.detected_long(camera_frame)
             frame, type_detected = process_frame(
                 camera_frame, detector, is_motion_detected
             )
-            fps.mark_processed()
-            if fps.update_elapsed_time():
-                print(f"{fps.get_current()=:.2f}")
+
             if display_preview:
                 cv2.imshow("Processed", frame)
             if SAVE_TO_SHM:
