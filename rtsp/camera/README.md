@@ -17,3 +17,8 @@ Yolo model
 
 https://github.com/user-attachments/assets/31c59760-47aa-42c5-b173-9059712532e9
 
+# Preview
+
+```
+opencv-python==4.11.0.86  # use this version for preview
+```
