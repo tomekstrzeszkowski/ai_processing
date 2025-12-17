@@ -70,7 +70,7 @@ class MotionDetector:
         # State machine logic
         if self.is_active_move:
             # Looking for no motion to deactivate
-            if not self.is_motion_detected:
+            if not self.last_detection_result:
                 if self.first_target_state_frame is None:
                     self.first_target_state_frame = self.frame_count
                 elif (self.frame_count - self.first_target_state_frame) >= self.deactive_frames:
@@ -80,7 +80,7 @@ class MotionDetector:
                 self.first_target_state_frame = None
         else:
             # Looking for motion to activate
-            if is_motion_detected:
+            if self.last_detection_result:
                 if self.first_target_state_frame is None:
                     self.first_target_state_frame = self.frame_count
                 elif (self.frame_count - self.first_target_state_frame) >= self.detection_frames:
