@@ -59,8 +59,6 @@ if __name__ == "__main__":
         should_process = fps.should_process()
         cached_detection = None if should_process else detector.last_detection
         motion_detected = motion.detected_long(frame_array) if should_process else False
-        if not should_process:
-            print(cached_detection)
         drawer = Drawer(frame_array)
         if motion_detected or cached_detection:
             type_detected = -1
