@@ -1,6 +1,7 @@
 import onnxruntime as ort
 import numpy as np
 import cv2
+import multiprocessing
 from functools import cached_property
 from detector.const import YoloObject, YOLO_MODEL_NAME_TO_SCALE_TO_ORIGINAL, ACTIVE_MODEL
 from detector.utils import calculate_iou
@@ -24,6 +25,10 @@ class Detector:
 
     @cached_property
     def model(self):
+        session_options = ort.SessionOptions()
+        num_threads = multiprocessing.cpu_count()
+        session_options.intra_op_num_threads = num_threads
+        session_options.inter_op_num_threads = num_threads
         return ort.InferenceSession(
             self.yolo_model_name,
             providers=['CPUExecutionProvider']

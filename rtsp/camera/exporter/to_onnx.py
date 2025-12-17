@@ -1,7 +1,7 @@
 from ultralytics import YOLO
 from onnxruntime.quantization import quantize_dynamic, QuantType
 
-name = "yolov8n"
+name = "yolo11n"
 model = YOLO(f"{name}.pt")
 
 model.export(
