@@ -31,6 +31,7 @@ class Detector:
         session_options.inter_op_num_threads = num_threads
         return ort.InferenceSession(
             self.yolo_model_name,
+            sess_options=session_options,
             providers=['CPUExecutionProvider']
         )
 
