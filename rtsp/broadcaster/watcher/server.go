@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"image"
-	"image/jpeg"
 	"io"
 	"log"
 	"mime/multipart"
@@ -55,6 +53,17 @@ func (s *Server) registerFrameListener() chan [][]byte {
 	defer s.listenerMux.Unlock()
 	s.frameListeners = append(s.frameListeners, listener)
 	return listener
+}
+func (s *Server) unregisterFrameListener(listener chan [][]byte) {
+	s.listenerMux.Lock()
+	defer s.listenerMux.Unlock()
+	for i, l := range s.frameListeners {
+		if l == listener {
+			s.frameListeners = append(s.frameListeners[:i], s.frameListeners[i+1:]...)
+			close(listener)
+			break
+		}
+	}
 }
 func (s *Server) broadcastFrames() {
 	for frames := range s.frames {
@@ -133,19 +142,12 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request) {
 	mw.SetBoundary("frame")
 
 	streamFrames := s.registerFrameListener()
-	defer close(streamFrames)
+	defer s.unregisterFrameListener(streamFrames)
 
 	for frames := range streamFrames {
 		for _, frame := range frames {
 			fmt.Println("Serving frame of size:", len(frame))
-			img, _, err := image.Decode(bytes.NewReader(frame))
-			if err != nil {
-				log.Printf("Error decoding image: %v", err)
-				continue
-			}
-
-			// Write JPEG frame to multipart stream
-			if err := writeJPEGFrame(mw, img); err != nil {
+			if err := writeJPEGFrame(mw, frame); err != nil {
 				log.Printf("Error writing JPEG frame: %v", err)
 				return
 			}
@@ -157,20 +159,16 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func writeJPEGFrame(mw *multipart.Writer, frame image.Image) error {
-	var buf bytes.Buffer
-	if err := jpeg.Encode(&buf, frame, &jpeg.Options{Quality: 80}); err != nil {
-		return err
-	}
+func writeJPEGFrame(mw *multipart.Writer, frame []byte) error {
 	header := textproto.MIMEHeader{}
 	header.Set("Content-Type", "image/jpeg")
-	header.Set("Content-Length", fmt.Sprintf("%d", buf.Len()))
+	header.Set("Content-Length", fmt.Sprintf("%d", len(frame)))
 
 	part, err := mw.CreatePart(header)
 	if err != nil {
 		return err
 	}
-	if _, err := part.Write(buf.Bytes()); err != nil {
+	if _, err := part.Write(frame); err != nil {
 		return err
 	}
 
