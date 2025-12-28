@@ -34,6 +34,8 @@ def main():
     display_preview = bool(os.getenv("DISPLAY_PREVIEW", ""))
     SAVE_TO_SHM = bool(os.getenv("SAVE_TO_SHM", ""))
     SAVE_VIDEO = bool(os.getenv("SAVE_VIDEO", ""))
+    RESIZE_WIDTH = int(os.getenv("RESIZE_WIDTH", "1"))
+    RESIZE_HEIGHT = int(os.getenv("RESIZE_HEIGHT", "1"))
     detector = Detector()
     motion = MotionDetector(min_area=500, threshold=25)
     url_clean = re.sub(r"(rtsp:\/\/.+:)(.+)@", r"\1***@", url)
@@ -60,8 +62,8 @@ def main():
 
     # Get camera properties
     camera_fps = video.get(cv2.CAP_PROP_FPS)
-    width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH) / 2)
-    height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT) / 2)
+    width = int(video.get(cv2.CAP_PROP_FRAME_WIDTH) * RESIZE_WIDTH)
+    height = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT) * RESIZE_HEIGHT)
     video.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     video.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
     video.set(cv2.CAP_PROP_FPS, 3)
@@ -84,7 +86,8 @@ def main():
             frame, type_detected = process_frame(
                 camera_frame, detector, is_motion_detected
             )
-
+            if RESIZE_WIDTH != 1 or RESIZE_HEIGHT != 1:
+                frame = cv2.resize(frame, (width, height))
             if display_preview:
                 cv2.imshow("Processed", frame)
             if SAVE_TO_SHM:
@@ -93,7 +96,6 @@ def main():
                     write_frame_to_shared_memory(
                         buffer, type_detected, shm_name=f"video_frame"
                     )
-                del buffer
             if SAVE_VIDEO:
                 found_object = type_detected != -1
                 has_detected = found_object or has_detected
@@ -104,7 +106,7 @@ def main():
                             width,
                             height,
                         )
-                    video_tracked.add_frame(cv2.resize(frame, (width, height)))
+                    video_tracked.add_frame(frame)
                 elif video_tracked:
                     if has_detected:
                         video_tracked.save()
