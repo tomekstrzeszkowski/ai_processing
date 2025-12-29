@@ -116,40 +116,13 @@ func (vt *VideoTrack) SendFrame(frame image.Image) error {
 	return nil
 }
 func (vt *VideoTrack) Start(memory *watcher.SharedMemoryReceiver) {
-	var currentFrame image.Image
-	var cancel context.CancelFunc
-
 	for frame := range memory.Frames {
-
 		img, _, err := image.Decode(bytes.NewReader(frame))
 		if err != nil {
 			log.Printf("Error decoding image: %v", err)
 			continue
 		}
-		if cancel != nil {
-			cancel()
-		}
-		currentFrame = img
-		vt.SendFrame(currentFrame)
-		// repeat the same frame with 30 FPS
-		ctx, cancelFunc := context.WithCancel(vt.ctx)
-		cancel = cancelFunc
-		go func(frame image.Image) {
-			ticker := time.NewTicker(time.Second / 30)
-			defer ticker.Stop()
-
-			for {
-				select {
-				case <-ticker.C:
-					vt.SendFrame(frame)
-				case <-ctx.Done():
-					return
-				}
-			}
-		}(currentFrame)
-	}
-	if cancel != nil {
-		cancel()
+		vt.SendFrame(img)
 	}
 }
 

@@ -12,7 +12,7 @@ class FpsMonitor:
 
     def should_process(self):
         self.frame_counter += 1
-        return (self.frame_counter % self.skip_frames) != 0
+        return (self.frame_counter % self.skip_frames) == 0
 
     def get_current(self):
         return self.current_fps
