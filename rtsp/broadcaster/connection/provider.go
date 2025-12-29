@@ -13,6 +13,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/event"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
+	"strzcam.com/broadcaster/frame"
 	"strzcam.com/broadcaster/video"
 )
 
@@ -20,12 +21,12 @@ const BufferCapacity = 100
 
 type Provider struct {
 	host        host.Host
-	frameBuffer [][]byte
+	frameBuffer []frame.Frame
 	path        string
 }
 
 func NewProvider(host host.Host, path string) *Provider {
-	return &Provider{host: host, path: path, frameBuffer: make([][]byte, 0, BufferCapacity)}
+	return &Provider{host: host, path: path, frameBuffer: make([]frame.Frame, 0, BufferCapacity)}
 }
 
 func (p *Provider) HandleConnectedPeers() {
@@ -51,15 +52,18 @@ func (p *Provider) StartListening(ctx context.Context) {
 	fullAddr := GetHostAddress(p.host)
 	log.Printf("I am %s\n", fullAddr)
 	p.host.SetStreamHandler("/get-frame/1.0.0", func(stream network.Stream) {
+		framesData, err := json.Marshal(p.frameBuffer)
+		if err != nil {
+			log.Printf("Error marshaling frames: %v", err)
+			return
+		}
 		now := time.Now()
 		timestamp := make([]byte, 8)
 		binary.BigEndian.PutUint64(timestamp, uint64(now.UnixMicro()))
 		stream.Write(timestamp)
-		for _, frame := range p.frameBuffer {
-			stream.Write(frame)
-		}
+		stream.Write(framesData)
 		stream.Close()
-		p.frameBuffer = make([][]byte, 0, BufferCapacity)
+		p.frameBuffer = make([]frame.Frame, 0, BufferCapacity)
 	})
 	p.host.SetStreamHandler("/get-video/1.0.0", func(stream network.Stream) {
 		defer stream.Close()
@@ -100,7 +104,7 @@ func (p *Provider) StartListening(ctx context.Context) {
 	})
 }
 
-func (p *Provider) BroadcastFrame(frame []byte) {
+func (p *Provider) BroadcastFrame(frame frame.Frame) {
 	if len(p.frameBuffer) >= BufferCapacity {
 		p.frameBuffer = append(p.frameBuffer[1:], frame)
 	} else {

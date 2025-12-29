@@ -1,7 +1,6 @@
 package web_rtc
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"image"
@@ -13,6 +12,7 @@ import (
 	"github.com/pion/mediadevices/pkg/prop"
 	"github.com/pion/webrtc/v3"
 	"github.com/pion/webrtc/v3/pkg/media"
+	frameUtils "strzcam.com/broadcaster/frame"
 	"strzcam.com/broadcaster/watcher"
 )
 
@@ -117,15 +117,10 @@ func (vt *VideoTrack) SendFrame(frame image.Image) error {
 }
 func (vt *VideoTrack) Start(memory *watcher.SharedMemoryReceiver) {
 	for frame := range memory.Frames {
-		img, _, err := image.Decode(bytes.NewReader(frame))
-		if err != nil {
-			log.Printf("Error decoding image: %v", err)
-			continue
-		}
+		img, _ := frameUtils.DecodeRawFrame(frame)
 		vt.SendFrame(img)
 	}
 }
-
 func (vt *VideoTrack) Close() error {
 	vt.cancel()
 	if vt.encoder != nil {

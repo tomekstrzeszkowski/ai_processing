@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+
+	"strzcam.com/broadcaster/frame"
 )
 
 type HLSConverter struct {
@@ -17,10 +19,10 @@ type HLSConverter struct {
 	frameWriter   io.WriteCloser
 	mu            sync.Mutex
 	segmentNumber int
-	Frames        chan [][]byte
+	Frames        chan []frame.Frame
 }
 
-func NewHLSConverter(outputDir string, frames chan [][]byte) (*HLSConverter, error) {
+func NewHLSConverter(outputDir string, frames chan []frame.Frame) (*HLSConverter, error) {
 	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
 		if err := os.MkdirAll(outputDir, 0755); err != nil {
 			panic(fmt.Sprintf("Cannot create directory: %v", err))
@@ -87,7 +89,7 @@ func (h *HLSConverter) writeFramesToFFmpeg() {
 	for frame := range h.Frames {
 		for _, chunk := range frame {
 			log.Print("Frame")
-			if _, err := h.frameWriter.Write(chunk); err != nil {
+			if _, err := h.frameWriter.Write(chunk.Data); err != nil {
 				log.Printf("Error writing to ffmpeg stdin: %v", err)
 				return
 			}

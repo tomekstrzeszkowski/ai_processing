@@ -1,6 +1,9 @@
 package main
 
-import "strzcam.com/broadcaster/watcher"
+import (
+	frameUtils "strzcam.com/broadcaster/frame"
+	"strzcam.com/broadcaster/watcher"
+)
 
 func main() {
 	memory, _ := watcher.NewSharedMemoryReceiver("video_frame")
@@ -11,9 +14,11 @@ func main() {
 
 	server.PrepareEndpoints()
 	go func() {
+		frames := []frameUtils.Frame{}
 		for frame := range memory.Frames {
-			server.BroadcastFrame([][]byte{frame})
+			frames = append(frames, frame)
 		}
+		server.BroadcastFrame(frames)
 	}()
 	server.Start()
 }

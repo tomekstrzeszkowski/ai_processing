@@ -91,11 +91,9 @@ def main():
             if display_preview:
                 cv2.imshow("Processed", frame)
             if SAVE_TO_SHM:
-                success, buffer = cv2.imencode(".jpg", frame)
-                if success:
-                    write_frame_to_shared_memory(
-                        buffer, type_detected, shm_name=f"video_frame"
-                    )
+                write_frame_to_shared_memory(
+                    frame, type_detected, shm_name=f"video_frame"
+                )
             if SAVE_VIDEO:
                 found_object = type_detected != -1
                 has_detected = found_object or has_detected

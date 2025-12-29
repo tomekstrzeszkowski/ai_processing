@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"strzcam.com/broadcaster/frame"
 )
 
 type ConfigProvider interface {
@@ -41,15 +42,13 @@ func (d DefaultConfigProvider) GetSaveChunkSize() int {
 }
 
 type SignificantFrame struct {
-	Data     []byte
-	Detected int
-	Before   *CircularBuffer
+	Frame  frame.Frame
+	Before *CircularBuffer
 }
-
 type SharedMemoryReceiver struct {
 	shmPath           string
 	watcher           *fsnotify.Watcher
-	Frames            chan []byte
+	Frames            chan frame.Frame
 	SignificantFrames chan SignificantFrame
 	configProvider    ConfigProvider
 	savePath          string
@@ -69,7 +68,7 @@ func NewSharedMemoryReceiverWithConfig(shmName string, configProvider ConfigProv
 	receiver := &SharedMemoryReceiver{
 		shmPath:           filepath.Join("/dev/shm", shmName),
 		watcher:           watcher,
-		Frames:            make(chan []byte, 10),
+		Frames:            make(chan frame.Frame, 10),
 		SignificantFrames: make(chan SignificantFrame, 100),
 		configProvider:    configProvider,
 		savePath:          saveFramePath,
@@ -89,26 +88,22 @@ func NewSharedMemoryReceiver(shmName string) (*SharedMemoryReceiver, error) {
 	return NewSharedMemoryReceiverWithConfig(shmName, NewDefaultConfigProvider())
 }
 
-func (smr *SharedMemoryReceiver) ReadFrameFromShm() ([]byte, int, error) {
+func (smr *SharedMemoryReceiver) ReadFrameFromShm() (frame.Frame, error) {
 	// Check if file exists
 	detected := -1
 	if _, err := os.Stat(smr.shmPath); os.IsNotExist(err) {
-		return nil, detected, fmt.Errorf("no valid shared memory file found")
+		return frame.Frame{Detected: detected}, fmt.Errorf("no valid shared memory file found")
 	}
-
-	// Read the entire file
 	data, err := os.ReadFile(smr.shmPath)
 	if err != nil {
-		return nil, detected, err
+		return frame.Frame{Detected: detected}, err
 	}
-
-	if len(data) < 5 {
-		return nil, detected, fmt.Errorf("invalid frame data: too short")
-	}
-	detected = int(int8(data[0]))
-	dataLength := binary.LittleEndian.Uint32(data[1:5])
-	frameData := data[5 : 5+dataLength]
-	return frameData, detected, nil
+	return frame.Frame{
+		Data:     data[9:],
+		Width:    binary.LittleEndian.Uint32(data[1:5]),
+		Height:   binary.LittleEndian.Uint32(data[5:9]),
+		Detected: int(int8(data[0])),
+	}, nil
 }
 func (smr *SharedMemoryReceiver) SendSignificantFrame(sf SignificantFrame) {
 	select {
@@ -146,7 +141,7 @@ func (smr *SharedMemoryReceiver) WatchSharedMemoryReadOnly() {
 			if event.Name == smr.shmPath &&
 				(event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create) {
 
-				frameData, detected, err := smr.ReadFrameFromShm()
+				frame, err := smr.ReadFrameFromShm()
 				if err != nil {
 					log.Printf("Error reading frame from shared memory: %v", err)
 					continue
@@ -158,12 +153,12 @@ func (smr *SharedMemoryReceiver) WatchSharedMemoryReadOnly() {
 					frameCount = 0
 					startTime = time.Now()
 				}
-				smr.Frames <- frameData
+				smr.Frames <- frame
 				log.Printf(
 					"[FPS %f] New frame received: %d bytes, that was %d",
 					smr.ActualFps,
-					len(frameData),
-					detected,
+					len(frame.Data),
+					frame.Detected,
 				)
 			}
 
@@ -195,16 +190,16 @@ func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 			if event.Name == smr.shmPath &&
 				(event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create) {
 
-				frameData, detected, err := smr.ReadFrameFromShm()
+				frame, err := smr.ReadFrameFromShm()
 				if err != nil {
 					log.Printf("Error reading frame from shared memory: %v", err)
 					continue
 				}
 				// skip the same event triggered twice
-				if bytes.Equal(frameData, lastFrameData) {
+				if bytes.Equal(frame.Data, lastFrameData) {
 					continue
 				}
-				lastFrameData = frameData
+				lastFrameData = frame.Data
 				elapsedTime := time.Since(startTime)
 				frameCount++
 				if elapsedTime > time.Second {
@@ -212,21 +207,22 @@ func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 					frameCount = 0
 					startTime = time.Now()
 				}
-				smr.logStats(smr.ActualFps, len(frameData), detected, before.Size(), after)
-				smr.Frames <- frameData
-				if detected != -1 {
+				smr.logStats(smr.ActualFps, len(frame.Data), frame.Detected, before.Size(), after)
+				smr.Frames <- frame
+				if frame.Detected != -1 {
 					sf := SignificantFrame{
-						Data: frameData, Detected: detected, Before: before,
+						Frame:  frame,
+						Before: before,
 					}
 					go smr.SendSignificantFrame(sf)
 					after = showWhatWasAfter + 1
 				} else if after-1 <= 0 {
-					before.Add(frameData)
+					before.Add(frame.Data)
 				}
 				if after != 0 {
 					after--
-					if detected == -1 {
-						sf := SignificantFrame{Data: frameData, Detected: -1, Before: nil}
+					if frame.Detected == -1 {
+						sf := SignificantFrame{Frame: frame, Before: nil}
 						go smr.SendSignificantFrame(sf)
 					}
 					if after == 0 {
@@ -263,7 +259,7 @@ func (smr *SharedMemoryReceiver) SaveFrameForLater() {
 			}
 			detectedFrame.Before.Clear()
 		}
-		SaveFrame(i, detectedFrame.Data, path)
+		SaveFrame(i, detectedFrame.Frame.Data, path)
 		i += 1
 	}
 }

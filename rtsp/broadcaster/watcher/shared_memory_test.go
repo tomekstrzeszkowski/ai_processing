@@ -30,7 +30,7 @@ func (tcp TestConfigProvider) GetSaveChunkSize() int {
 	return 1024
 }
 func createFrameWithDelay(buffer []byte, detected int, shmName string) {
-	header := make([]byte, 5)
+	header := make([]byte, 9)
 	header[0] = byte(detected)
 	binary.LittleEndian.PutUint32(header[1:], uint32(len(buffer)))
 
@@ -78,9 +78,9 @@ func TestSharedMemory(t *testing.T) {
 		if err != nil {
 			t.Fatal("Failed to create SharedMemoryReceiver:", err)
 		}
-		_, i, err := receiver.ReadFrameFromShm()
-		if i != -1 {
-			t.Error("Expected index -1 when no shared memory file exists, got:", i)
+		frame, err := receiver.ReadFrameFromShm()
+		if frame.Detected != -1 {
+			t.Error("Expected index -1 when no shared memory file exists, got:", frame.Detected)
 		}
 		if err == nil {
 			t.Error("Expected an error when reading from non-existent shared memory file, got nil")
@@ -95,15 +95,15 @@ func TestSharedMemory(t *testing.T) {
 		defer os.Remove("/dev/shm/test_shm")
 		receiver, _ := NewSharedMemoryReceiverWithConfig("test_shm", configProvider)
 		defer receiver.Close()
-		frame, detected, err := receiver.ReadFrameFromShm()
+		frame, err := receiver.ReadFrameFromShm()
 		if err != nil {
 			t.Fatal("Failed to read frame from shared memory:", err)
 		}
-		if frame == nil {
-			t.Errorf("Expected frame data %s, got %s", data, frame)
+		if frame.Data == nil {
+			t.Errorf("Expected frame data %s, got %s", data, frame.Data)
 		}
-		if detected != 0 {
-			t.Errorf("Expected detected value 0, got %d", detected)
+		if frame.Detected != 0 {
+			t.Errorf("Expected detected value 0, got %d", frame.Detected)
 		}
 	})
 
@@ -118,14 +118,15 @@ func TestSharedMemory(t *testing.T) {
 		timeout := time.After(2 * time.Second)
 		select {
 		case frame := <-receiver.Frames:
-			if string(frame) != string(data) {
-				t.Errorf("Expected frame data %s, got %s", data, frame)
+			if string(frame.Data) != string(data) {
+				t.Errorf("Expected frame data %s, got %s", data, frame.Data)
 			}
 		case <-timeout:
 			t.Fatal("Timeout waiting for frame")
 		}
 	})
 }
+
 func TestSaveSignificantFrameForLaterWhenDirIsEmpty(t *testing.T) {
 	tempPath := t.TempDir()
 	configProvider := TestConfigProvider{path: tempPath, before: 3, after: 3}
@@ -142,8 +143,8 @@ func TestSaveSignificantFrameForLaterWhenDirIsEmpty(t *testing.T) {
 		go func() {
 			select {
 			case frame := <-receiver.Frames:
-				if string(frame) != string(data) {
-					t.Errorf("Expected frame data %s, got %s", data, frame)
+				if string(frame.Data) != string(data) {
+					t.Errorf("Expected frame data %s, got %s", data, frame.Data)
 				}
 				hasFrames <- true
 			case <-timeout:
@@ -153,7 +154,7 @@ func TestSaveSignificantFrameForLaterWhenDirIsEmpty(t *testing.T) {
 		go func() {
 			select {
 			case sf := <-receiver.SignificantFrames:
-				if sf.Data == nil {
+				if sf.Frame.Data == nil {
 					t.Error("Expected frame data")
 				}
 				dirs, _ := os.ReadDir(tempPath)
@@ -189,7 +190,7 @@ func TestSaveSignificantFrameForLaterWhenDirIsEmpty(t *testing.T) {
 		go func() {
 			select {
 			case sf := <-receiver.SignificantFrames:
-				if sf.Data == nil {
+				if sf.Frame.Data == nil {
 					t.Error("Expected frame data")
 				}
 				if sf.Before.Size() != 2 {
@@ -226,17 +227,17 @@ func TestSaveSignificantFrameForLaterWhenDirIsEmpty(t *testing.T) {
 				case sf := <-receiver.SignificantFrames:
 					switch {
 					case called == 0:
-						if !bytes.Equal(sf.Data, data) {
+						if !bytes.Equal(sf.Frame.Data, data) {
 							t.Error("Expected frame data")
 						}
 						if sf.Before.Size() != 0 {
 							t.Error("Buffer size is incorrect")
 						}
 					case called == 1:
-						if bytes.Equal(sf.Data, data) {
+						if bytes.Equal(sf.Frame.Data, data) {
 							t.Error("Expected frame data")
 						}
-						if bytes.Equal(sf.Data, []byte("nothing 2")) {
+						if bytes.Equal(sf.Frame.Data, []byte("nothing 2")) {
 							t.Error("Expected frame data")
 						}
 						if sf.Before != nil {
@@ -277,11 +278,11 @@ func TestSaveSignificantFrameForLaterWhenDirIsEmpty(t *testing.T) {
 				case sf := <-receiver.SignificantFrames:
 					switch {
 					case called == 0:
-						if !bytes.Equal(sf.Data, data) {
+						if !bytes.Equal(sf.Frame.Data, data) {
 							t.Error("No detection")
 						}
 					case called == 1:
-						if bytes.Equal(sf.Data, []byte("nothing after 3")) {
+						if bytes.Equal(sf.Frame.Data, []byte("nothing after 3")) {
 							t.Error("No significant frame is expected")
 						}
 						if sf.Before != nil {

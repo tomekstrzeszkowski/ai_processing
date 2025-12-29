@@ -7,7 +7,8 @@ import time
 def write_frame_to_shared_memory(buffer, type_, shm_name="video_frame"):
     """Save frame buffer to shared memory."""
     data = buffer.tobytes()
-    header = struct.pack("<bI", type_, len(data))
+    height, width = buffer.shape[:2]
+    header = struct.pack("<bII", type_, width, height)
     shm_path = f"/dev/shm/{shm_name}"
 
     # Write frame data directly (no size header needed)
@@ -22,9 +23,9 @@ def write_frame_to_shared_memory(buffer, type_, shm_name="video_frame"):
 
 def read_frame_from_shared_memory(shm_name="video_frame"):
     with open(f"/dev/shm/{shm_name}", "rb") as f:
-        header = f.read(5)
-        type_, data_length = struct.unpack("<bI", header)
-        data = f.read(data_length)
+        header = f.read(9)
+        type_, width, height = struct.unpack("<bII", header)
+        data = f.read()
     return data, type_
 
 

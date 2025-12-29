@@ -12,6 +12,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
+	"strzcam.com/broadcaster/frame"
 	"strzcam.com/broadcaster/video"
 )
 
@@ -84,7 +85,7 @@ func (v *Viewer) isTimestampHealthy(ts *time.Time) bool {
 	}
 	return !v.lastFramePacket.After(*ts)
 }
-func (v *Viewer) GetFrames() ([][]byte, error) {
+func (v *Viewer) GetFrames() ([]frame.Frame, error) {
 	ts, dataFrames := v.GetData()
 	if v.lastFramePacket == nil {
 		v.lastFramePacket = ts
@@ -93,7 +94,8 @@ func (v *Viewer) GetFrames() ([][]byte, error) {
 		return nil, fmt.Errorf("Received frames from the past!")
 	}
 	v.lastFramePacket = ts
-	frames, _ := splitJPEGFrames(dataFrames)
+	var frames []frame.Frame
+	json.Unmarshal(dataFrames, &frames)
 	return frames, nil
 }
 func (v *Viewer) GetVideoList(start time.Time, end time.Time) []video.Video {
@@ -103,7 +105,6 @@ func (v *Viewer) GetVideoList(start time.Time, end time.Time) []video.Video {
 		return []video.Video{}
 	}
 	defer stream.Close()
-	//TODO: get date range from frontend
 	dateRange := fmt.Sprintf("%s-%s", start.Format("2006-01-02"), end.Format("2006-01-02"))
 	stream.Write([]byte(dateRange + "\n"))
 	data, err := io.ReadAll(stream)

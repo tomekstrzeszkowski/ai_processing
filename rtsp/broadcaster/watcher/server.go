@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/jpeg"
 	"io"
 	"log"
 	"mime/multipart"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"strzcam.com/broadcaster/connection"
+	frameUtils "strzcam.com/broadcaster/frame"
 	"strzcam.com/broadcaster/video"
 )
 
@@ -32,29 +35,29 @@ const (
 type Server struct {
 	port           uint16
 	Viewers        []*connection.Viewer
-	frames         chan [][]byte
-	frameListeners []chan [][]byte
+	frames         chan []frameUtils.Frame
+	frameListeners []chan []frameUtils.Frame
 	listenerMux    sync.Mutex
 }
 
 func NewServer(port uint16) (*Server, error) {
 	server := &Server{
 		port:           port,
-		frames:         make(chan [][]byte, 1),
-		frameListeners: []chan [][]byte{},
+		frames:         make(chan []frameUtils.Frame, 1),
+		frameListeners: []chan []frameUtils.Frame{},
 	}
 	go server.broadcastFrames()
 	return server, nil
 }
 
-func (s *Server) registerFrameListener() chan [][]byte {
-	listener := make(chan [][]byte, 5)
+func (s *Server) registerFrameListener() chan []frameUtils.Frame {
+	listener := make(chan []frameUtils.Frame, 5)
 	s.listenerMux.Lock()
 	defer s.listenerMux.Unlock()
 	s.frameListeners = append(s.frameListeners, listener)
 	return listener
 }
-func (s *Server) unregisterFrameListener(listener chan [][]byte) {
+func (s *Server) unregisterFrameListener(listener chan []frameUtils.Frame) {
 	s.listenerMux.Lock()
 	defer s.listenerMux.Unlock()
 	for i, l := range s.frameListeners {
@@ -78,8 +81,8 @@ func (s *Server) broadcastFrames() {
 		s.listenerMux.Unlock()
 	}
 }
-func (s *Server) BroadcastFrame(frames [][]byte) {
-	log.Print("Broadcasting frame of size:", len(frames[0]))
+func (s *Server) BroadcastFrame(frames []frameUtils.Frame) {
+	log.Print("Broadcasting frames:", len(frames))
 	s.frames <- frames
 }
 func (s *Server) AddViewer(v *connection.Viewer) {
@@ -146,19 +149,35 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request) {
 
 	for frames := range streamFrames {
 		for _, frame := range frames {
-			fmt.Println("Serving frame of size:", len(frame))
-			if err := writeJPEGFrame(mw, frame); err != nil {
+			img, err := frameUtils.DecodeRawFrame(frame)
+			if err != nil {
+				log.Printf("Error decoding frame: %v", err)
+				continue
+			}
+			jpegData, err := s.encodeJpeg(img)
+			if err != nil {
+				log.Printf("Error encoding JPEG: %v", err)
+				continue
+			}
+
+			fmt.Println("Serving frame of size:", len(jpegData))
+			if err := writeJPEGFrame(mw, jpegData); err != nil {
 				log.Printf("Error writing JPEG frame: %v", err)
 				return
 			}
-
 			if flusher, ok := w.(http.Flusher); ok {
 				flusher.Flush()
 			}
 		}
 	}
 }
-
+func (s *Server) encodeJpeg(img image.Image) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 85}); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
 func writeJPEGFrame(mw *multipart.Writer, frame []byte) error {
 	header := textproto.MIMEHeader{}
 	header.Set("Content-Type", "image/jpeg")
@@ -174,6 +193,7 @@ func writeJPEGFrame(mw *multipart.Writer, frame []byte) error {
 
 	return nil
 }
+
 func (s *Server) PrepareEndpoints() {
 	hlsConverter, _ := NewHLSConverter("./hls_output", s.registerFrameListener())
 	hlsConverter.Start()
