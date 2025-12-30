@@ -91,9 +91,7 @@ def main():
             if display_preview:
                 cv2.imshow("Processed", frame)
             if SAVE_TO_SHM:
-                success, buffer = cv2.imencode(".jpg", frame)
-                if not success:
-                    continue
+                buffer = cv2.cvtColor(frame, cv2.COLOR_BGR2YUV_I420)
                 write_frame_to_shared_memory(
                     buffer, type_detected, width, height, shm_name=f"video_frame"
                 )

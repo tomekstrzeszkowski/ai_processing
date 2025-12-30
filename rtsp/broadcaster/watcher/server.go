@@ -148,7 +148,8 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request) {
 	for frames := range streamFrames {
 		for _, frame := range frames {
 			fmt.Println("Serving frame of size:", len(frame.Data))
-			if err := writeJpegFrame(mw, frame.Data); err != nil {
+			jpegData, _ := frameUtils.YuvToJpeg(frame.Data, int(frame.Width), int(frame.Height))
+			if err := writeJpegFrame(mw, jpegData); err != nil {
 				log.Printf("Error writing JPEG frame: %v", err)
 				return
 			}

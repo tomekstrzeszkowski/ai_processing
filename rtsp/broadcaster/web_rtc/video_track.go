@@ -117,7 +117,7 @@ func (vt *VideoTrack) SendFrame(frame image.Image) error {
 }
 func (vt *VideoTrack) Start(memory *watcher.SharedMemoryReceiver) {
 	for frame := range memory.Frames {
-		img, _ := frameUtils.DecodeRawFrame(frame)
+		img := frameUtils.BytesToYCbCr(frame.Data, int(frame.Width), int(frame.Height))
 		vt.SendFrame(img)
 	}
 }
