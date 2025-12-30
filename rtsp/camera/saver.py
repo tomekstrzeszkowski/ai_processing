@@ -4,19 +4,15 @@ import cv2
 import time
 
 
-def write_frame_to_shared_memory(buffer, type_, shm_name="video_frame"):
+def write_frame_to_shared_memory(buffer, type_, width, height, shm_name="video_frame"):
     """Save frame buffer to shared memory."""
     data = buffer.tobytes()
-    height, width = buffer.shape[:2]
     header = struct.pack("<bII", type_, width, height)
     shm_path = f"/dev/shm/{shm_name}"
-
-    # Write frame data directly (no size header needed)
     temp_path = f"{shm_path}.tmp"
     with open(temp_path, "wb") as f:
         f.write(header)
         f.write(data)
-
     # Atomic rename
     os.rename(temp_path, shm_path)
 

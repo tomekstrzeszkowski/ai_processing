@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"image"
-	"image/jpeg"
 	"io"
 	"log"
 	"mime/multipart"
@@ -149,36 +147,19 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request) {
 
 	for frames := range streamFrames {
 		for _, frame := range frames {
-			img, err := frameUtils.DecodeRawFrame(frame)
-			if err != nil {
-				log.Printf("Error decoding frame: %v", err)
-				continue
-			}
-			jpegData, err := s.encodeJpeg(img)
-			if err != nil {
-				log.Printf("Error encoding JPEG: %v", err)
-				continue
-			}
-
-			fmt.Println("Serving frame of size:", len(jpegData))
-			if err := writeJPEGFrame(mw, jpegData); err != nil {
+			fmt.Println("Serving frame of size:", len(frame.Data))
+			if err := writeJpegFrame(mw, frame.Data); err != nil {
 				log.Printf("Error writing JPEG frame: %v", err)
 				return
 			}
+
 			if flusher, ok := w.(http.Flusher); ok {
 				flusher.Flush()
 			}
 		}
 	}
 }
-func (s *Server) encodeJpeg(img image.Image) ([]byte, error) {
-	var buf bytes.Buffer
-	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 85}); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-func writeJPEGFrame(mw *multipart.Writer, frame []byte) error {
+func writeJpegFrame(mw *multipart.Writer, frame []byte) error {
 	header := textproto.MIMEHeader{}
 	header.Set("Content-Type", "image/jpeg")
 	header.Set("Content-Length", fmt.Sprintf("%d", len(frame)))
