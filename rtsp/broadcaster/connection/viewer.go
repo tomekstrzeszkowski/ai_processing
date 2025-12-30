@@ -23,25 +23,6 @@ type Viewer struct {
 	lastFramePacket *time.Time
 }
 
-func splitJPEGFrames(data []byte) ([][]byte, error) {
-	var frames [][]byte
-	start := 0
-
-	for i := 0; i < len(data)-1; i++ {
-		// Look for JPEG start marker (0xFF 0xD8)
-		if data[i] == 0xFF && data[i+1] == 0xD8 && i > start {
-			frames = append(frames, data[start:i])
-			start = i
-		}
-	}
-
-	// Add the last frame
-	if start < len(data) {
-		frames = append(frames, data[start:])
-	}
-
-	return frames, nil
-}
 func CreateAndConnectNewViewer(ctx context.Context, host *host.Host, info peer.AddrInfo) (*Viewer, error) {
 	fullAddr := GetHostAddress(*host)
 	log.Printf("I'm %s\n", fullAddr)

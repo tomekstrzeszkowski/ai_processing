@@ -7,11 +7,6 @@ import (
 	"image/jpeg"
 )
 
-func DecodeRawFrame(frame Frame) (image.Image, error) {
-	reader := bytes.NewReader(frame.Data)
-	return jpeg.Decode(reader)
-}
-
 func YuvToJpeg(yuvData []byte, width, height int) ([]byte, error) {
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 

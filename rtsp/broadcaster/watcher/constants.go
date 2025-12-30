@@ -29,8 +29,8 @@ func NewConfig() Config {
 		SaveChunkSize:           saveChunkSize,
 		ConvertedVideoSpace:     getEnvAsInt("CONVERTED_VIDEO_SPACE", saveChunkSize*10),
 		SaveDirMaxSize:          getEnvAsInt("SAVE_DIR_MAX_SIZE", saveChunkSize*100),
-		ShowWhatWasBefore:       getEnvAsInt("CONVERT_FRAMES_BEFORE_DAYS", 30*60*1), // FPS * seconds * minutes
-		ShowWhatWasAfter:        getEnvAsInt("CONVERT_FRAMES_BEFORE_DAYS", 30*60*1),
+		ShowWhatWasBefore:       getEnvAsInt("SHOW_WHAT_WAS_BEFORE", 30*60*1), // FPS * seconds * minutes
+		ShowWhatWasAfter:        getEnvAsInt("SHOW_WHAT_WAS_AFTER", 30*60*1),
 	}
 }
 

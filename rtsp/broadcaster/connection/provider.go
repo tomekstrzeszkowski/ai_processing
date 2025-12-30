@@ -17,7 +17,7 @@ import (
 	"strzcam.com/broadcaster/video"
 )
 
-const BufferCapacity = 100
+const BufferCapacity = 30
 
 type Provider struct {
 	host        host.Host
