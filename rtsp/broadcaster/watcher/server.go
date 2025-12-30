@@ -146,10 +146,10 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request) {
 	defer s.unregisterFrameListener(streamFrames)
 	frameNumber := 0
 	for frames := range streamFrames {
+		frameNumber++
 		if frameNumber%10 == 0 {
 			continue
 		}
-		frameNumber++
 		for i, frame := range frames {
 			if i%10 == 0 {
 				continue
