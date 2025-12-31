@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/joho/godotenv"
 	"strzcam.com/broadcaster/connection"
 	frameUtils "strzcam.com/broadcaster/frame"
 	"strzcam.com/broadcaster/video"
@@ -36,20 +37,29 @@ type Server struct {
 	frames         chan []frameUtils.Frame
 	frameListeners []chan []frameUtils.Frame
 	listenerMux    sync.Mutex
+	skipChunk      int
+	skipFrames     int
 }
 
 func NewServer(port uint16) (*Server, error) {
+	if err := godotenv.Load(); err != nil {
+		log.Printf("Warning: Error loading .env file: %v", err)
+	}
+	skipChunk := getEnvAsInt("SERVER_CONVERSION_TO_JPEG_SKIP_CHUNK", 4)
+	skipFrames := getEnvAsInt("SERVER_CONVERSION_TO_JPEG_SKIP_FRAMES", 10)
 	server := &Server{
 		port:           port,
 		frames:         make(chan []frameUtils.Frame, 1),
 		frameListeners: []chan []frameUtils.Frame{},
+		skipChunk:      skipChunk,
+		skipFrames:     skipFrames,
 	}
 	go server.broadcastFrames()
 	return server, nil
 }
 
 func (s *Server) registerFrameListener() chan []frameUtils.Frame {
-	listener := make(chan []frameUtils.Frame, 5)
+	listener := make(chan []frameUtils.Frame, 1)
 	s.listenerMux.Lock()
 	defer s.listenerMux.Unlock()
 	s.frameListeners = append(s.frameListeners, listener)
@@ -144,14 +154,14 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request) {
 
 	streamFrames := s.registerFrameListener()
 	defer s.unregisterFrameListener(streamFrames)
-	frameNumber := 0
+	frameNumber := -1
 	for frames := range streamFrames {
 		frameNumber++
-		if frameNumber%10 == 0 {
+		if frameNumber%s.skipChunk != 0 {
 			continue
 		}
 		for i, frame := range frames {
-			if i%10 == 0 {
+			if i%s.skipFrames != 0 {
 				continue
 			}
 			fmt.Println("Serving frame of size:", len(frame.Data))
