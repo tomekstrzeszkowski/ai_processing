@@ -79,8 +79,6 @@ func (p *Provider) StartListening(ctx context.Context) {
 			return
 		}
 		filePath := filepath.Join(p.path, name)
-		//TODO: better way to send video in stream
-		//videoBytes, _ := video.GetVideoByPath(filePath)
 		videoBytes, _ := video.ConvertAndGetVideoForWeb(filePath)
 		stream.Write(videoBytes)
 		stream.Close()

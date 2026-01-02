@@ -83,14 +83,12 @@ func (s *Server) broadcastFrames() {
 			select {
 			case listener <- frames:
 			default:
-				log.Print("Dropping frame for a listener")
 			}
 		}
 		s.listenerMux.Unlock()
 	}
 }
 func (s *Server) BroadcastFrame(frames []frameUtils.Frame) {
-	log.Print("Broadcasting frames:", len(frames))
 	s.frames <- frames
 }
 func (s *Server) AddViewer(v *connection.Viewer) {
@@ -210,8 +208,6 @@ func (s *Server) PrepareEndpoints() {
 				w.WriteHeader(http.StatusOK)
 				return
 			}
-
-			// Serve the file
 			h.ServeHTTP(w, r)
 		})
 	}(fileServer)))

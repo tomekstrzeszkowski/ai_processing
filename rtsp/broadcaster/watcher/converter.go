@@ -3,7 +3,6 @@ package watcher
 import (
 	"bytes"
 	"fmt"
-	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,6 +22,8 @@ type Converter struct {
 	watchingDirs []string
 	mux          sync.RWMutex
 	Framerate    *float64
+	Width        *uint32
+	Height       *uint32
 	Config       Config
 }
 
@@ -111,33 +112,50 @@ func RemoveOldestVideoFiles(savePath string, skipDates []string, convertedVideoS
 }
 
 func (c *Converter) convert(chunkPath string) error {
+	fmt.Printf("Starting FFmpeg conversion... %d\n", *c.Width)
+	if *c.Width == 0 || *c.Height == 0 {
+		width, height, err := ReadMetadata(chunkPath)
+		if err != nil {
+			return fmt.Errorf("failed to read metadata: %w", err)
+		}
+		*c.Width = width
+		*c.Height = height
+	}
 	patches := strings.Split(chunkPath, "/")
-	inputPattern := filepath.Join(chunkPath, "frame%d.jpg")
+	inputPattern := filepath.Join(chunkPath, "frame%d.yuv")
 	dateDirName, chunkDirName := patches[len(patches)-2], patches[len(patches)-1]
 	fmt.Printf("[FPS:%f] Converting frames in %s %v\n", *c.Framerate, dateDirName, patches)
 	outputPath := filepath.Join(append(patches[:len(patches)-2], fmt.Sprintf("%s-%s.mp4", dateDirName, chunkDirName))...)
-
 	args := []string{
-		"-framerate", fmt.Sprintf("%d", int(math.Ceil(*c.Framerate))),
-		"-i", inputPattern,
-		"-vf", "scale=1900:1068,fps=fps=30:round=up",
+		"-f", "image2",
+		"-c:v", "rawvideo",
+		"-video_size", fmt.Sprintf("%dx%d", *c.Width, *c.Height),
 		"-pix_fmt", "yuv420p",
+		"-framerate", fmt.Sprintf("%f", *c.Framerate),
+		"-i", inputPattern,
 		"-c:v", "libx264",
+		"-preset", "medium",
+		"-tune", "zerolatency",
 		"-profile:v", "baseline",
 		"-level", "3.1",
-		"-bf", "0",
-		"-g", "30", // GOP size = framerate for better seeking
-		"-keyint_min", "30", // Minimum GOP size
+		"-pix_fmt", "yuv420p",
+		"-bf", "0", // NO B-frames (critical for baseline profile)
+		"-g", fmt.Sprintf("%d", int(*c.Framerate)),
+		"-keyint_min", fmt.Sprintf("%d", int(*c.Framerate)),
 		"-sc_threshold", "0",
+		"-b:v", "2M",
+		"-maxrate", "2M",
+		"-bufsize", "4M",
+		"-bsf:v", "h264_mp4toannexb", // Ensure Annex B format with SPS/PPS
 		"-f", "h264",
 		outputPath,
 	}
 	var stderr bytes.Buffer
+
 	cmd := exec.Command("ffmpeg", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = &stderr
 
-	// Run the command
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("ffmpeg conversion failed: %w", err)
 	}

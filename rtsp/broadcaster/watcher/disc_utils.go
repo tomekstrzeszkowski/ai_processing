@@ -14,18 +14,47 @@ import (
 )
 
 func SaveFrame(i int, b []byte, path string) {
-	f, err := os.Create(fmt.Sprintf("%s/frame%d.jpg", path, i))
+	//log.Printf("Saving frame to %s/frame%d\n", path, i)
+	f, err := os.Create(fmt.Sprintf("%s/frame%d.yuv", path, i))
 	if err != nil {
 		panic(fmt.Sprintf("Cant create file: %v", err))
 	}
 	defer f.Close()
 	f.Write(b)
 }
+func SaveMetadata(width, height uint32, path string) {
+	log.Printf("Saving frame to %s/meta.txt\n", path)
+	f, err := os.Create(fmt.Sprintf("%s/meta.txt", path))
+	if err != nil {
+		panic(fmt.Sprintf("Cant create file: %v", err))
+	}
+	defer f.Close()
+	f.Write([]byte(fmt.Sprintf("%d %d", width, height)))
+}
+func IsMetadataExists(path string) bool {
+	_, err := os.Stat(fmt.Sprintf("%s/meta.txt", path))
+	return !errors.Is(err, os.ErrNotExist)
+}
+func ReadMetadata(path string) (uint32, uint32, error) {
+	data, err := os.ReadFile(fmt.Sprintf("%s/meta.txt", path))
+	if err != nil {
+		return 0, 0, err
+	}
+	parts := strings.Split(string(data), " ")
+	width, err := strconv.ParseUint(parts[0], 10, 32)
+	if err != nil {
+		return 0, 0, err
+	}
+	height, err := strconv.ParseUint(parts[1], 10, 32)
+	if err != nil {
+		return 0, 0, err
+	}
+	return uint32(width), uint32(height), nil
+}
 func DirSize(path string) (int64, error) {
 	var size int64
 	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
 		if err != nil {
-			// can be deleted when converting to video
 			log.Printf("Error accessing file %v", err)
 			return err
 		}
@@ -68,7 +97,7 @@ func GetNewFileIndex(path string) (int, error) {
 	for _, file := range files {
 		if file.Type().IsRegular() {
 			var num int
-			_, err := fmt.Sscanf(file.Name(), "frame%d.jpg", &num)
+			_, err := fmt.Sscanf(file.Name(), "frame%d.yuv", &num)
 			if err == nil && num > maxNum {
 				maxNum = num
 			}

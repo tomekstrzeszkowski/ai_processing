@@ -81,7 +81,7 @@ if __name__ == "__main__":
         frame_bgr = cv2.cvtColor(np.array(frame_draw), cv2.COLOR_RGB2BGR)
         if SAVE_TO_SHM:
             write_frame_to_shared_memory(
-                frame_bgr, type_detected, shm_name=f"video_frame"
+                frame_bgr, type_detected, width, height, shm_name=f"video_frame"
             )
         video_tracked.add_frame(cv2.resize(frame_bgr, (width, height)))
     video.release()

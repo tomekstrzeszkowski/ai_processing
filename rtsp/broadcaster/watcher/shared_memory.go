@@ -53,6 +53,8 @@ type SharedMemoryReceiver struct {
 	configProvider    ConfigProvider
 	savePath          string
 	ActualFps         float64
+	FrameWidth        uint32
+	FrameHeight       uint32
 }
 
 func NewSharedMemoryReceiverWithConfig(shmName string, configProvider ConfigProvider) (*SharedMemoryReceiver, error) {
@@ -73,6 +75,8 @@ func NewSharedMemoryReceiverWithConfig(shmName string, configProvider ConfigProv
 		configProvider:    configProvider,
 		savePath:          saveFramePath,
 		ActualFps:         30,
+		FrameWidth:        0,
+		FrameHeight:       0,
 	}
 
 	// Watch the shared memory directory
@@ -153,6 +157,9 @@ func (smr *SharedMemoryReceiver) WatchSharedMemoryReadOnly() {
 					frameCount = 0
 					startTime = time.Now()
 				}
+				frame.Fps = smr.ActualFps
+				smr.FrameHeight = frame.Height
+				smr.FrameWidth = frame.Width
 				smr.Frames <- frame
 				log.Printf(
 					"[FPS %f] New frame received: %d bytes, that was %d",
@@ -208,6 +215,9 @@ func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 					startTime = time.Now()
 				}
 				smr.logStats(smr.ActualFps, len(frame.Data), frame.Detected, before.Size(), after)
+				frame.Fps = smr.ActualFps
+				smr.FrameHeight = frame.Height
+				smr.FrameWidth = frame.Width
 				smr.Frames <- frame
 				if frame.Detected != -1 {
 					sf := SignificantFrame{
@@ -261,5 +271,8 @@ func (smr *SharedMemoryReceiver) SaveFrameForLater() {
 		}
 		SaveFrame(i, detectedFrame.Frame.Data, path)
 		i += 1
+		if !IsMetadataExists(path) {
+			SaveMetadata(detectedFrame.Frame.Width, detectedFrame.Frame.Height, path)
+		}
 	}
 }

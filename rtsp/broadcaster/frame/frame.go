@@ -5,4 +5,5 @@ type Frame struct {
 	Width    uint32
 	Height   uint32
 	Detected int
+	Fps      float64
 }

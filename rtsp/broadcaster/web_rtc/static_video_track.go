@@ -209,6 +209,8 @@ func (vt *StaticVideoTrack) playInBackground() {
 	ticker := time.NewTicker(vt.frameDur)
 	defer ticker.Stop()
 
+	var accessUnit [][]byte // Accumulate NALs for one access unit
+
 	for {
 		select {
 		case <-vt.ctx.Done():
@@ -227,13 +229,28 @@ func (vt *StaticVideoTrack) playInBackground() {
 			nal, err := vt.reader.NextNAL()
 			if err != nil {
 				if err == io.EOF {
-					log.Printf("Video playback finished (EOF) %s loop: %b", vt.currentPos.String(), vt.isLoop)
+					// Flush any remaining access unit
+					if len(accessUnit) > 0 {
+						frameData := aggregateNALs(accessUnit)
+						if err := vt.track.WriteSample(media.Sample{
+							Data:     frameData,
+							Duration: vt.frameDur,
+						}); err != nil {
+							fmt.Printf("Error writing final sample: %v\n", err)
+						}
+						vt.currentPos += vt.frameDur
+						vt.frameCount++
+						accessUnit = nil
+					}
+
+					log.Printf("Video playback finished (EOF) %s loop: %t", vt.currentPos.String(), vt.isLoop)
 					if vt.isLoop {
 						vt.file.Seek(0, io.SeekStart)
 						reader, _ := h264reader.NewReader(vt.file)
 						vt.reader = reader
 						vt.currentPos = 0
 						vt.frameCount = 0
+						accessUnit = nil
 						vt.mu.Unlock()
 						continue
 					} else {
@@ -246,21 +263,43 @@ func (vt *StaticVideoTrack) playInBackground() {
 				vt.mu.Unlock()
 				continue
 			}
-			if err := vt.track.WriteSample(media.Sample{
-				Data:     nal.Data,
-				Duration: vt.frameDur,
-			}); err != nil {
-				fmt.Printf("Error writing sample: %v\n", err)
-			}
+
 			nalUnitType := nal.Data[0] & 0x1F
-			if nalUnitType == 1 || nalUnitType == 5 {
+
+			// Check if this NAL starts a new access unit (VCL NAL)
+			// NAL types 1 (coded slice), 5 (IDR slice) are VCL NALs
+			isVCL := nalUnitType == 1 || nalUnitType == 5
+
+			// If we have an access unit and encounter a new VCL NAL, write the previous one
+			if len(accessUnit) > 0 && isVCL {
+				frameData := aggregateNALs(accessUnit)
+				if err := vt.track.WriteSample(media.Sample{
+					Data:     frameData,
+					Duration: vt.frameDur,
+				}); err != nil {
+					fmt.Printf("Error writing sample: %v\n", err)
+				}
 				vt.currentPos += vt.frameDur
 				vt.frameCount++
+				accessUnit = nil
 			}
+
+			// Accumulate NAL in current access unit
+			accessUnit = append(accessUnit, nal.Data)
 
 			vt.mu.Unlock()
 		}
 	}
+}
+
+// Helper function to concatenate NAL units with start codes
+func aggregateNALs(nals [][]byte) []byte {
+	var result []byte
+	for _, nal := range nals {
+		result = append(result, []byte{0, 0, 0, 1}...) // Annex B start code
+		result = append(result, nal...)
+	}
+	return result
 }
 
 func (vt *StaticVideoTrack) Close() error {
@@ -279,23 +318,35 @@ func (vt *StaticVideoTrack) Close() error {
 	return nil
 }
 func (vt *StaticVideoTrack) PlayFrame() {
+	vt.mu.Lock()
+	defer vt.mu.Unlock()
+
+	if vt.reader == nil {
+		return
+	}
+
 	nal, err := vt.reader.NextNAL()
 	if err != nil {
 		if err == io.EOF {
 			return
 		}
+		fmt.Printf("Error reading NAL: %v\n", err)
+		return
 	}
+
 	if err := vt.track.WriteSample(media.Sample{
 		Data:     nal.Data,
 		Duration: vt.frameDur,
 	}); err != nil {
 		fmt.Printf("Error writing sample: %v\n", err)
 	}
+
 	nalUnitType := nal.Data[0] & 0x1F
 	if nalUnitType == 1 || nalUnitType == 5 {
 		vt.currentPos += vt.frameDur
 	}
 }
+
 func (vt *StaticVideoTrack) PlayBackFrame() {
 	previousPos := vt.currentPos - vt.frameDur*2
 	if previousPos < 0 {

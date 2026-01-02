@@ -22,8 +22,10 @@ func (v *VideoCreator) StartWatchingFrames() {
 func (v *VideoCreator) SaveFramesForLater() {
 	v.SharedMemoryReceiver.SaveFrameForLater()
 }
-func (v *VideoCreator) StartConversionWorkflow(actualFps *float64) {
+func (v *VideoCreator) StartConversionWorkflow(actualFps *float64, width *uint32, height *uint32) {
 	v.Converter.Framerate = actualFps
+	v.Converter.Width = width
+	v.Converter.Height = height
 	v.Converter.RunUntilComplete()
 	go func() {
 		ticker := time.NewTicker(10 * time.Minute)

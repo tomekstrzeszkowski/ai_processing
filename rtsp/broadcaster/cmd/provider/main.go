@@ -22,7 +22,7 @@ func main() {
 	defer creator.Close()
 	go creator.StartWatchingFrames()
 	go creator.SaveFramesForLater()
-	go creator.StartConversionWorkflow(&memory.ActualFps)
+	go creator.StartConversionWorkflow(&memory.ActualFps, &memory.FrameWidth, &memory.FrameHeight)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -43,7 +43,6 @@ func main() {
 			break
 		}
 		if i < 9 {
-			// Exponential-ish backoff
 			log.Printf("Failed to make initial DHT announcement attempt %d", i)
 			time.Sleep(time.Second * time.Duration((i+1)*i))
 		}

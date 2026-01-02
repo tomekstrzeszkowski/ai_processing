@@ -50,7 +50,7 @@ func GetVideoByDateRange(path string, start time.Time, end time.Time) ([]Video, 
 	}
 	var videoList []Video = []Video{}
 	//date Y-m-d-part-video_length
-	pattern := regexp.MustCompile(`^(\d{4}-\d{2}-\d{2})-\d+(?:-\d+)?\.mp4$`)
+	pattern := regexp.MustCompile(`^(\d{4}-\d{2}-\d{2})-(\d+)(?:-\d+)?\.mp4$`)
 
 	err := filepath.Walk(path, func(pathWalk string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -85,17 +85,21 @@ func GetVideoByDateRange(path string, start time.Time, end time.Time) ([]Video, 
 		return nil, err
 	}
 
-	// Sort by date (newest first), then by filename for same dates
+	// Sort by date (newest first), then by part number (highest first) for same dates
 	sort.Slice(videoList, func(i, j int) bool {
-		matchA := pattern.FindStringSubmatch(videoList[i].Name)[1]
-		matchB := pattern.FindStringSubmatch(videoList[j].Name)[1]
-		dateA, _ := time.Parse("2006-01-02", matchA)
-		dateB, _ := time.Parse("2006-01-02", matchB)
+		matchesA := pattern.FindStringSubmatch(videoList[i].Name)
+		matchesB := pattern.FindStringSubmatch(videoList[j].Name)
+
+		dateA, _ := time.Parse("2006-01-02", matchesA[1])
+		dateB, _ := time.Parse("2006-01-02", matchesB[1])
+
 		if dateA.Equal(dateB) {
-			// For same date, sort by filename (which includes the number suffix)
-			return videoList[i].Name < videoList[j].Name
+			// For same date, sort by part number (highest first)
+			partA, _ := strconv.Atoi(matchesA[2])
+			partB, _ := strconv.Atoi(matchesB[2])
+			return partA > partB
 		}
-		return dateB.After(dateA)
+		return dateA.After(dateB)
 	})
 
 	return videoList, nil

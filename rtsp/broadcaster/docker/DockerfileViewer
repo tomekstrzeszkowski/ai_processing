@@ -10,11 +10,12 @@ RUN go mod download
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -gcflags="-N -l" -a -o ./bin/viewer ./cmd/viewer/main.go
 
 
-FROM debian:trixie-slim
+FROM linuxserver/ffmpeg
 WORKDIR /app/
 COPY --from=builder /app/bin/viewer ./bin/viewer
 COPY --from=builder /go/bin/dlv /
 
 EXPOSE 7080 2345
 
+ENTRYPOINT []
 CMD ["./bin/viewer"]

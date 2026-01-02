@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,6 +21,9 @@ type HLSConverter struct {
 	mu            sync.Mutex
 	segmentNumber int
 	Frames        chan []frame.Frame
+	width         int
+	height        int
+	fps           float64
 }
 
 func NewHLSConverter(outputDir string, frames chan []frame.Frame) (*HLSConverter, error) {
@@ -32,38 +36,85 @@ func NewHLSConverter(outputDir string, frames chan []frame.Frame) (*HLSConverter
 		segmentDir:   outputDir,
 		playlistPath: filepath.Join(outputDir, "stream.m3u8"),
 		Frames:       frames,
+		width:        0, // Will be set from first frame
+		height:       0, // Will be set from first frame
+		fps:          1, // Default FPS
 	}, nil
 }
 
 func (h *HLSConverter) Start() error {
-	// Use FFmpeg to convert MJPEG to HLS
+	go h.processFrames()
+	log.Println("HLS converter started, waiting for first frame...")
+	return nil
+}
+
+func (h *HLSConverter) processFrames() {
+	// Wait for first frame to get dimensions
+	firstFrameSet, ok := <-h.Frames
+	if !ok {
+		log.Println("Frame channel closed before receiving first frame")
+		return
+	}
+
+	if len(firstFrameSet) == 0 {
+		log.Println("Received empty frame set")
+		return
+	}
+
+	// Get dimensions from first frame
+	firstChunk := firstFrameSet[0]
+	h.width = int(firstChunk.Width)
+	h.height = int(firstChunk.Height)
+
+	log.Printf("Received first frame: %dx%d, starting FFmpeg", h.width, h.height)
+
+	// Now start FFmpeg with correct dimensions
+	if err := h.startFFmpeg(); err != nil {
+		log.Printf("Failed to start FFmpeg: %v", err)
+		return
+	}
+
+	// Write the first frame
+	for _, chunk := range firstFrameSet {
+		if _, err := h.frameWriter.Write(chunk.Data); err != nil {
+			log.Printf("Error writing first frame to ffmpeg: %v", err)
+			return
+		}
+	}
+
+	// Continue writing remaining frames
+	h.writeFramesToFFmpeg()
+}
+
+func (h *HLSConverter) startFFmpeg() error {
 	h.ffmpegCmd = exec.Command("ffmpeg",
-		"-f", "mjpeg",
-		"-re",
+		"-f", "rawvideo",
+		"-pixel_format", "yuv420p",
+		"-video_size", fmt.Sprintf("%dx%d", h.width, h.height),
+		"-framerate", fmt.Sprintf("%f", h.fps),
 		"-i", "pipe:0",
-		"-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+		"-vf", fmt.Sprintf("fps=%f", h.fps), // Force constant FPS
+		"-vsync", "cfr",
 		"-c:v", "libx264",
 		"-preset", "ultrafast",
 		"-tune", "zerolatency",
-		"-g", "30", // Keyframe every 30 frames (more frequent)
+		"-g", "30",
 		"-sc_threshold", "0",
 		"-f", "hls",
 		"-hls_time", "2",
-		"-hls_list_size", "6", // Keep 6 segments (~12 seconds)
+		"-hls_list_size", "6",
 		"-hls_flags", "delete_segments+omit_endlist+independent_segments",
 		"-hls_segment_type", "mpegts",
-		"-hls_allow_cache", "0", // Disable caching
+		"-hls_allow_cache", "0",
 		"-hls_segment_filename", filepath.Join(h.segmentDir, "segment_%03d.ts"),
 		h.playlistPath,
 	)
 
-	// Capture FFmpeg's stderr for debugging
 	h.ffmpegCmd.Stderr = os.Stderr
 	h.ffmpegCmd.Stdout = os.Stdout
 
 	stdinPipe, err := h.ffmpegCmd.StdinPipe()
 	if err != nil {
-		log.Printf("failed to get ffmpeg stdin pipe: %v", err)
 		return fmt.Errorf("failed to get ffmpeg stdin pipe: %w", err)
 	}
 	h.frameWriter = stdinPipe
@@ -72,10 +123,7 @@ func (h *HLSConverter) Start() error {
 		return fmt.Errorf("failed to start ffmpeg: %w", err)
 	}
 
-	log.Printf("Starting to write frames to ffmpeg")
-	go h.writeFramesToFFmpeg()
-
-	log.Println("HLS converter started")
+	log.Printf("FFmpeg started with dimensions %dx%d @ %d fps", h.width, h.height, h.fps)
 	return nil
 }
 
@@ -84,14 +132,23 @@ func (h *HLSConverter) writeFramesToFFmpeg() {
 		return
 	}
 	defer h.frameWriter.Close()
-	log.Printf("Starting to write frames to ffmpeg")
 
-	for frame := range h.Frames {
-		for _, chunk := range frame {
-			log.Print("Frame")
-			if _, err := h.frameWriter.Write(chunk.Data); err != nil {
+	for frameSet := range h.Frames {
+		for _, frame := range frameSet {
+			fmt.Printf("FPS set in frame: %f %dx%d\n", frame.Fps, frame.Width, frame.Height)
+			// Verify dimensions haven't changed
+			if int(frame.Width) != h.width || int(frame.Height) != h.height {
+				log.Printf("WARNING: Frame dimensions changed from %dx%d to %dx%d - this may cause issues",
+					h.width, h.height, frame.Width, frame.Height)
+			}
+
+			if _, err := h.frameWriter.Write(frame.Data); err != nil {
 				log.Printf("Error writing to ffmpeg stdin: %v", err)
 				return
+			}
+			if (frame.Fps > 0) && (math.Abs(frame.Fps-h.fps) > 1) {
+				h.SetFpsAndSize(frame.Fps, int(frame.Width), int(frame.Height))
+				log.Printf("Adaptive FPS adjustment: setting FPS to %.1f", h.fps)
 			}
 		}
 	}
@@ -108,4 +165,12 @@ func (h *HLSConverter) Stop() error {
 		return h.ffmpegCmd.Process.Kill()
 	}
 	return nil
+}
+
+func (h *HLSConverter) SetFpsAndSize(fps float64, width int, height int) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.fps = fps
+	h.width = width
+	h.height = height
 }
