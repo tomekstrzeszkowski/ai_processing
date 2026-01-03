@@ -36,8 +36,8 @@ func NewHLSConverter(outputDir string, frames chan []frame.Frame) (*HLSConverter
 		segmentDir:   outputDir,
 		playlistPath: filepath.Join(outputDir, "stream.m3u8"),
 		Frames:       frames,
-		width:        0,  // Will be set from first frame
-		height:       0,  // Will be set from first frame
+		width:        0,  // Will be set as frame received
+		height:       0,  // Will be set as frame received
 		fps:          10, // Default FPS
 	}, nil
 }
@@ -48,17 +48,13 @@ func (h *HLSConverter) Start() error {
 	return nil
 }
 
-func (h *HLSConverter) processFrames() {
-	h.writeFramesToFFmpeg()
-}
-
 func (h *HLSConverter) startFFmpeg() error {
 	h.ffmpegCmd = exec.Command("ffmpeg",
 		"-f", "rawvideo",
 		"-pixel_format", "yuv420p",
 		"-video_size", fmt.Sprintf("%dx%d", h.width, h.height),
 		"-framerate", fmt.Sprintf("%.2f", h.fps),
-		"-thread_queue_size", "512",
+		"-thread_queue_size", "2048",
 		"-i", "pipe:0",
 		"-c:v", "libx264",
 		"-preset", "veryfast",
@@ -68,9 +64,9 @@ func (h *HLSConverter) startFFmpeg() error {
 		"-g", fmt.Sprintf("%d", int(h.fps)),
 		"-keyint_min", fmt.Sprintf("%d", int(h.fps)),
 		"-sc_threshold", "0",
-		"-b:v", "2M",
-		"-maxrate", "2M",
-		"-bufsize", "4M",
+		"-b:v", "2500k",
+		"-maxrate", "5000k",
+		"-bufsize", "10000k",
 		"-bsf:v", "h264_mp4toannexb", // Ensure Annex B format with SPS/PPS
 		"-f", "hls",
 		"-hls_time", "2",
@@ -97,8 +93,7 @@ func (h *HLSConverter) startFFmpeg() error {
 	return nil
 }
 
-func (h *HLSConverter) writeFramesToFFmpeg() {
-
+func (h *HLSConverter) processFrames() {
 	for frameSet := range h.Frames {
 		var combinedData []byte
 		for _, f := range frameSet {
@@ -122,6 +117,9 @@ func (h *HLSConverter) writeFramesToFFmpeg() {
 				defer h.frameWriter.Close()
 			}
 			combinedData = append(combinedData, f.Data...)
+		}
+		if h.frameWriter == nil {
+			continue
 		}
 		if _, err := h.frameWriter.Write(combinedData); err != nil {
 			log.Printf("Error writing to ffmpeg stdin: %v", err)
