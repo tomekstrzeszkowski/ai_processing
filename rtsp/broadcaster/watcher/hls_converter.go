@@ -107,7 +107,7 @@ func (h *HLSConverter) processFrames() {
 				continue
 			}
 			if f.Width != uint32(h.width) || f.Height != uint32(h.height) || math.Abs(h.fps-f.Fps) > 1 {
-				h.SetFpsAndSize(f.Fps, int(f.Width), int(f.Height))
+				h.SetFpsAndSize(f.Fps+0.1, int(f.Width), int(f.Height))
 			}
 			if h.frameWriter == nil {
 				if err := h.startFFmpeg(); err != nil {

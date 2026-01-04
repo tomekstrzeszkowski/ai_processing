@@ -80,8 +80,10 @@ if __name__ == "__main__":
                 draw.rectangle(face.tolist(), outline="red")
         frame_bgr = cv2.cvtColor(np.array(frame_draw), cv2.COLOR_RGB2BGR)
         if SAVE_TO_SHM:
+            shm_frame = cv2.resize(frame_bgr, (width, height))
+            buffer = cv2.cvtColor(shm_frame, cv2.COLOR_BGR2YUV_I420)
             write_frame_to_shared_memory(
-                frame_bgr, type_detected, width, height, shm_name=f"video_frame"
+                buffer, type_detected, width, height, shm_name=f"video_frame"
             )
         video_tracked.add_frame(cv2.resize(frame_bgr, (width, height)))
     video.release()
