@@ -17,7 +17,7 @@ func NewVideoCreator(
 	}, nil
 }
 func (v *VideoCreator) StartWatchingFrames() {
-	v.SharedMemoryReceiver.WatchSharedMemory()
+	v.SharedMemoryReceiver.WatchSharedMemory(true)
 }
 func (v *VideoCreator) SaveFramesForLater() {
 	v.SharedMemoryReceiver.SaveFrameForLater()

@@ -8,7 +8,7 @@ import (
 func main() {
 	memory, _ := watcher.NewSharedMemoryReceiver("video_frame")
 	defer memory.Close()
-	go memory.WatchSharedMemory()
+	go memory.WatchSharedMemory(true)
 	go memory.SaveFrameForLater()
 	server, _ := watcher.NewServer(7071)
 

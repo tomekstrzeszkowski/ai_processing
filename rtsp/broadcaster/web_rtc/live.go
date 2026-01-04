@@ -93,7 +93,7 @@ func RunLive(signalingUrl string) {
 		if err != nil {
 			panic(fmt.Sprintf("Error creating shared memory receiver: %v", err))
 		}
-		go memory.WatchSharedMemoryReadOnly()
+		go memory.WatchSharedMemory(true)
 		videoTrack, err = NewVideoTrack()
 		if err != nil {
 			panic(err)

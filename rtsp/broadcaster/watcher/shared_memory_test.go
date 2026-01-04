@@ -113,7 +113,7 @@ func TestSharedMemory(t *testing.T) {
 
 		receiver, _ := NewSharedMemoryReceiverWithConfig("test_shm", configProvider)
 		defer receiver.Close()
-		go receiver.WatchSharedMemory()
+		go receiver.WatchSharedMemory(true)
 		createFrameWithDelay(data, 1, "test_shm")
 		timeout := time.After(2 * time.Second)
 		select {
@@ -135,7 +135,7 @@ func TestSaveSignificantFrameForLaterWhenDirIsEmpty(t *testing.T) {
 	t.Run("Detected frame", func(t *testing.T) {
 		receiver, _ := NewSharedMemoryReceiverWithConfig("test_shm", configProvider)
 		defer receiver.Close()
-		go receiver.WatchSharedMemory()
+		go receiver.WatchSharedMemory(true)
 		createFrameWithDelay(data, 1, "test_shm")
 		timeout := time.After(2 * time.Second)
 		hasFrames := make(chan bool, 1)
@@ -176,7 +176,7 @@ func TestSaveSignificantFrameForLaterWhenDirIsEmpty(t *testing.T) {
 	t.Run("Send frames before when detection", func(t *testing.T) {
 		receiver, _ := NewSharedMemoryReceiverWithConfig("test_shm", configProvider)
 		defer receiver.Close()
-		go receiver.WatchSharedMemory()
+		go receiver.WatchSharedMemory(true)
 		createFrameWithDelay([]byte("nothing 1"), -1, "test_shm")
 		createFrameWithDelay([]byte("nothing 2"), -1, "test_shm")
 		createFrameWithDelay(data, 0, "test_shm")
@@ -208,7 +208,7 @@ func TestSaveSignificantFrameForLaterWhenDirIsEmpty(t *testing.T) {
 	t.Run("Send frames after when detection", func(t *testing.T) {
 		receiver, _ := NewSharedMemoryReceiverWithConfig("test_shm", configProvider)
 		defer receiver.Close()
-		go receiver.WatchSharedMemory()
+		go receiver.WatchSharedMemory(true)
 		createFrameWithDelay(data, 0, "test_shm")
 		createFrameWithDelay([]byte("nothing 1"), -1, "test_shm")
 		createFrameWithDelay([]byte("nothing 2"), -1, "test_shm")
@@ -258,7 +258,7 @@ func TestSaveSignificantFrameForLaterWhenDirIsEmpty(t *testing.T) {
 	t.Run("Send after frames when buffer is full after detection", func(t *testing.T) {
 		receiver, _ := NewSharedMemoryReceiverWithConfig("test_shm", configProvider)
 		defer receiver.Close()
-		go receiver.WatchSharedMemory()
+		go receiver.WatchSharedMemory(true)
 		createFrameWithDelay(data, 0, "test_shm")
 		createFrameWithDelay([]byte("nothing after 1"), -1, "test_shm")
 		createFrameWithDelay([]byte("nothing after 2"), -1, "test_shm")

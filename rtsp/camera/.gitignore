@@ -1,9 +1,8 @@
-yolo11*
-yolov8*
-yolo5*
-venv/*
+yolo*
+venv*
 *.py[c|o]
 *_processed.mp4
 .env
 __pycache__/*
 *.mp4
+*.prof

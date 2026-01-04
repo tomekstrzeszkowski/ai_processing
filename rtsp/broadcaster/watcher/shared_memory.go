@@ -66,7 +66,6 @@ func NewSharedMemoryReceiverWithConfig(shmName string, configProvider ConfigProv
 	if err != nil {
 		return nil, err
 	}
-
 	receiver := &SharedMemoryReceiver{
 		shmPath:           filepath.Join("/dev/shm", shmName),
 		watcher:           watcher,
@@ -78,8 +77,6 @@ func NewSharedMemoryReceiverWithConfig(shmName string, configProvider ConfigProv
 		FrameWidth:        0,
 		FrameHeight:       0,
 	}
-
-	// Watch the shared memory directory
 	err = watcher.Add("/dev/shm")
 	if err != nil {
 		return nil, err
@@ -106,7 +103,7 @@ func (smr *SharedMemoryReceiver) ReadFrameFromShm() (frame.Frame, error) {
 		Data:     data[9:],
 		Width:    binary.LittleEndian.Uint32(data[1:5]),
 		Height:   binary.LittleEndian.Uint32(data[5:9]),
-		Detected: int(int8(data[0])),
+		Detected: int(data[0]),
 	}, nil
 }
 func (smr *SharedMemoryReceiver) SendSignificantFrame(sf SignificantFrame) {
@@ -116,12 +113,18 @@ func (smr *SharedMemoryReceiver) SendSignificantFrame(sf SignificantFrame) {
 		log.Printf("Timeout sending significant frame")
 	}
 }
-func (smr *SharedMemoryReceiver) logStats(actualFps float64, frameLength int, detected int, beforeSize int, after int) {
+func (smr *SharedMemoryReceiver) logStats(frame frame.Frame, before *CircularBuffer, after int) {
+	beforeSize := 0
+	if before != nil {
+		beforeSize = before.Size()
+	}
 	log.Printf(
-		"[FPS %f] New frame received: %d bytes, that was %d, before %d, after %d",
-		actualFps,
-		frameLength,
-		detected,
+		"[FPS %f] New frame %dx%d received: %d bytes, that was %d, before %d, after %d",
+		frame.Fps,
+		frame.Width,
+		frame.Height,
+		len(frame.Data),
+		frame.Detected,
 		beforeSize,
 		after,
 	)
@@ -130,58 +133,15 @@ func (smr *SharedMemoryReceiver) GetBaseDir() string {
 	year, month, day := time.Now().Date()
 	return fmt.Sprintf("%s/%d-%02d-%02d", smr.savePath, year, month, day)
 }
-func (smr *SharedMemoryReceiver) WatchSharedMemoryReadOnly() {
-	log.Println("Starting shared memory watcher in read-only mode...")
-	startTime := time.Now()
-	frameCount := 0
-	for {
-		select {
-		case event, ok := <-smr.watcher.Events:
-			if !ok {
-				return
-			}
-
-			// Check if it's our target file and it was written to
-			if event.Name == smr.shmPath &&
-				(event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create) {
-
-				frame, err := smr.ReadFrameFromShm()
-				if err != nil {
-					log.Printf("Error reading frame from shared memory: %v", err)
-					continue
-				}
-				elapsedTime := time.Since(startTime)
-				frameCount++
-				if elapsedTime > time.Second {
-					smr.ActualFps = float64(frameCount) / elapsedTime.Seconds()
-					frameCount = 0
-					startTime = time.Now()
-				}
-				frame.Fps = smr.ActualFps
-				smr.FrameHeight = frame.Height
-				smr.FrameWidth = frame.Width
-				smr.Frames <- frame
-				log.Printf(
-					"[FPS %f] New frame received: %d bytes, that was %d",
-					smr.ActualFps,
-					len(frame.Data),
-					frame.Detected,
-				)
-			}
-
-		case err, ok := <-smr.watcher.Errors:
-			if !ok {
-				return
-			}
-			log.Printf("Watcher error: %v", err)
-		}
-	}
-}
-func (smr *SharedMemoryReceiver) WatchSharedMemory() {
+func (smr *SharedMemoryReceiver) WatchSharedMemory(saveForLater bool) {
 	log.Println("Starting shared memory watcher...")
 	showWhatWasAfter := smr.configProvider.GetShowWhatWasAfter()
 	showWhatWasBefore := smr.configProvider.GetShowWhatWasBefore()
-	before := NewCircularBuffer(showWhatWasBefore)
+	var before *CircularBuffer
+	if !saveForLater {
+		showWhatWasBefore = 0
+		before = NewCircularBuffer(showWhatWasBefore)
+	}
 	after := 0
 	var lastFrameData []byte
 	startTime := time.Now()
@@ -192,8 +152,6 @@ func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 			if !ok {
 				return
 			}
-
-			// Check if it's our target file and it was written to
 			if event.Name == smr.shmPath &&
 				(event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create) {
 
@@ -214,19 +172,18 @@ func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 					frameCount = 0
 					startTime = time.Now()
 				}
-				smr.logStats(smr.ActualFps, len(frame.Data), frame.Detected, before.Size(), after)
 				frame.Fps = smr.ActualFps
 				smr.FrameHeight = frame.Height
 				smr.FrameWidth = frame.Width
 				smr.Frames <- frame
-				if frame.Detected != -1 {
+				if saveForLater && frame.Detected != -1 {
 					sf := SignificantFrame{
 						Frame:  frame,
 						Before: before,
 					}
 					go smr.SendSignificantFrame(sf)
 					after = showWhatWasAfter + 1
-				} else if after-1 <= 0 {
+				} else if saveForLater && after-1 <= 0 {
 					before.Add(frame.Data)
 				}
 				if after != 0 {
@@ -236,10 +193,10 @@ func (smr *SharedMemoryReceiver) WatchSharedMemory() {
 						go smr.SendSignificantFrame(sf)
 					}
 					if after == 0 {
-						//create a new dir for next event
 						CreateNewDirIndex(smr.GetBaseDir())
 					}
 				}
+				smr.logStats(frame, before, after)
 			}
 
 		case err, ok := <-smr.watcher.Errors:

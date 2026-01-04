@@ -22,3 +22,9 @@ https://github.com/user-attachments/assets/31c59760-47aa-42c5-b173-9059712532e9
 ```
 opencv-python==4.11.0.86  # use this version for preview
 ```
+
+
+# Yuv preview
+```
+ffplay -f rawvideo -pixel_format yuv420p -video_size 2560x1440 frame0.yuv
+```
