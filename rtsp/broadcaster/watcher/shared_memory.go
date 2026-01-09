@@ -103,14 +103,14 @@ func (smr *SharedMemoryReceiver) ReadFrameFromShm() (frame.Frame, error) {
 		Data:     data[9:],
 		Width:    binary.LittleEndian.Uint32(data[1:5]),
 		Height:   binary.LittleEndian.Uint32(data[5:9]),
-		Detected: int(data[0]),
+		Detected: int(int8(data[0])),
 	}, nil
 }
 func (smr *SharedMemoryReceiver) SendSignificantFrame(sf SignificantFrame) {
 	select {
 	case smr.SignificantFrames <- sf:
 	case <-time.After(500 * time.Millisecond):
-		log.Printf("Timeout sending significant frame")
+		//log.Printf("Timeout sending significant frame")
 	}
 }
 func (smr *SharedMemoryReceiver) logStats(frame frame.Frame, before *CircularBuffer, after int) {
@@ -136,11 +136,9 @@ func (smr *SharedMemoryReceiver) GetBaseDir() string {
 func (smr *SharedMemoryReceiver) WatchSharedMemory(saveForLater bool) {
 	log.Println("Starting shared memory watcher...")
 	showWhatWasAfter := smr.configProvider.GetShowWhatWasAfter()
-	showWhatWasBefore := smr.configProvider.GetShowWhatWasBefore()
 	var before *CircularBuffer
-	if !saveForLater {
-		showWhatWasBefore = 0
-		before = NewCircularBuffer(showWhatWasBefore)
+	if saveForLater {
+		before = NewCircularBuffer(smr.configProvider.GetShowWhatWasBefore())
 	}
 	after := 0
 	var lastFrameData []byte
