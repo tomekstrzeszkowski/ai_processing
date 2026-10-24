@@ -5,7 +5,6 @@ go 1.23.8
 toolchain go1.23.10
 
 require (
-	github.com/abema/go-mp4 v1.4.1
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/ipfs/go-cid v0.5.0
