@@ -234,6 +234,10 @@ export class WebRtcOfferee{
         });
         this.dataChannel?.send(JSON.stringify({type: "video", videoName}));
         const streamIdToStream = this.streamIdToStream;
+        const existingStream = streamIdToStream.get("video_frame_static_file");
+        if(existingStream?.getVideoTracks().some(track => track.readyState === "live")) {
+            return existingStream;
+        }
         return new Promise<MediaStream>((resolve, reject) => {
             function handleTrack(event: RTCTrackEvent) {
                 console.log("Added video track", event.streams, event)
