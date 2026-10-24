@@ -1,7 +1,9 @@
 package web_rtc
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"log"
@@ -9,11 +11,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/abema/go-mp4"
 	"github.com/pion/webrtc/v3"
 	"github.com/pion/webrtc/v3/pkg/media"
-	"github.com/pion/webrtc/v3/pkg/media/h264reader"
 )
 
+type VideoSample struct {
+	Data     []byte
+	Duration time.Duration
+	IsSync   bool
+}
 type StaticVideoTrack struct {
 	track      *webrtc.TrackLocalStaticSample
 	mu         sync.RWMutex
@@ -21,9 +28,11 @@ type StaticVideoTrack struct {
 	cancel     context.CancelFunc
 	playCtx    context.Context
 	playCancel context.CancelFunc
-	reader     *h264reader.H264Reader
-	file       *os.File
-	frameDur   time.Duration
+	samples    []VideoSample
+	sps        []byte
+	pps        []byte
+	currentIdx int
+	timescale  uint32
 	totalDur   time.Duration
 	playing    bool
 	currentPos time.Duration
@@ -52,7 +61,6 @@ func NewStaticVideoTrack() (*StaticVideoTrack, error) {
 		cancel:     cancel,
 		playCtx:    playCtx,
 		playCancel: playCancel,
-		frameDur:   time.Second / 30,
 		totalDur:   -1 * time.Second,
 		isLoop:     false,
 	}, nil
@@ -61,70 +69,171 @@ func NewStaticVideoTrack() (*StaticVideoTrack, error) {
 func (vt *StaticVideoTrack) LoadVideo(filePath string) error {
 	vt.mu.Lock()
 	defer vt.mu.Unlock()
-	if vt.playing {
-		vt.playing = false
+	videoPath, err := ensureMP4Container(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to probe MP4: %w", err)
 	}
-	if vt.file != nil {
-		vt.file.Close()
-		vt.file = nil
-		vt.reader = nil
-	}
-
-	file, err := os.Open(filePath)
+	file, err := os.Open(videoPath)
 	if err != nil {
 		return fmt.Errorf("failed to open video file: %w", err)
 	}
+	defer file.Close()
 
-	reader, err := h264reader.NewReader(file)
+	// Parse MP4 structure
+	info, err := mp4.Probe(file)
 	if err != nil {
-		file.Close()
-		return fmt.Errorf("failed to create H264 reader: %w", err)
+		return fmt.Errorf("failed to probe MP4: %w", err)
 	}
 
-	vt.file = file
-	vt.reader = reader
-	vt.currentPos = 0
-	vt.frameCount = 0
-	frameDur, err := GetFrameDuration(filePath)
+	// Find video track
+	var videoTrack *mp4.Track
+	for _, track := range info.Tracks {
+		if track.AVC != nil {
+			videoTrack = track
+			break
+		}
+	}
+
+	if videoTrack == nil {
+		return fmt.Errorf("no H.264 video track found in MP4")
+	}
+
+	vt.timescale = videoTrack.Timescale
+
+	// Extract SPS/PPS from avcC box
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("failed to seek to start: %w", err)
+	}
+
+	boxes, err := mp4.ExtractBoxWithPayload(file, nil, mp4.BoxPath{
+		mp4.BoxTypeMoov(),
+		mp4.BoxTypeTrak(),
+		mp4.BoxTypeMdia(),
+		mp4.BoxTypeMinf(),
+		mp4.BoxTypeStbl(),
+		mp4.BoxTypeStsd(),
+		mp4.BoxTypeAvc1(),
+		mp4.BoxTypeAvcC(),
+	})
 	if err != nil {
-		log.Printf("Warning: could not detect framerate, using default: %v", err)
-		vt.frameDur = time.Second / 30 // fallback
-	} else {
-		vt.frameDur = frameDur
-		log.Printf("Detected frame duration: %v (%.2f fps)", frameDur, float64(time.Second)/float64(frameDur))
+		return fmt.Errorf("failed to extract avcC box: %w", err)
 	}
-	vt.frameDur = frameDur
-	if err := vt.ReadDuration(filePath); err != nil {
-		return fmt.Errorf("Can not read file duration %w", err)
+
+	if len(boxes) == 0 {
+		return fmt.Errorf("avcC box not found")
 	}
+
+	avcC, ok := boxes[0].Payload.(*mp4.AVCDecoderConfiguration)
+	if !ok {
+		return fmt.Errorf("failed to cast to AVCDecoderConfiguration")
+	}
+
+	if len(avcC.SequenceParameterSets) > 0 {
+		vt.sps = avcC.SequenceParameterSets[0].NALUnit
+	}
+	if len(avcC.PictureParameterSets) > 0 {
+		vt.pps = avcC.PictureParameterSets[0].NALUnit
+	}
+
+	if vt.sps == nil || vt.pps == nil {
+		return fmt.Errorf("failed to extract SPS/PPS from MP4")
+	}
+
+	log.Printf("Found video track: timescale=%d, samples=%d", vt.timescale, len(videoTrack.Samples))
+	log.Printf("SPS length: %d, PPS length: %d", len(vt.sps), len(vt.pps))
+
+	// Find IDR frames
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("failed to seek to start: %w", err)
+	}
+	idrFrames, err := mp4.FindIDRFrames(file, videoTrack)
+	if err != nil {
+		log.Printf("Warning: failed to find IDR frames: %v", err)
+	}
+	idrSet := make(map[int]bool)
+	for _, idx := range idrFrames {
+		idrSet[idx] = true
+	}
+
+	// Calculate sample offsets from chunks
+	sampleOffsets := calculateSampleOffsets(videoTrack)
+
+	// Read all samples
+	vt.samples = make([]VideoSample, 0, len(videoTrack.Samples))
+	vt.totalDur = 0
+
+	for i, sample := range videoTrack.Samples {
+		if i >= len(sampleOffsets) {
+			break
+		}
+
+		offset := sampleOffsets[i]
+		isIDR := idrSet[i]
+
+		// Read sample data from file
+		if _, err := file.Seek(int64(offset), io.SeekStart); err != nil {
+			return fmt.Errorf("failed to seek to sample: %w", err)
+		}
+
+		data := make([]byte, sample.Size)
+		if _, err := io.ReadFull(file, data); err != nil {
+			return fmt.Errorf("failed to read sample: %w", err)
+		}
+
+		// Convert AVCC to Annex B format
+		annexBData := vt.avccToAnnexB(data, isIDR)
+
+		// Calculate duration from TimeDelta
+		duration := time.Duration(sample.TimeDelta) * time.Second / time.Duration(vt.timescale)
+
+		vt.samples = append(vt.samples, VideoSample{
+			Data:     annexBData,
+			Duration: duration,
+			IsSync:   isIDR,
+		})
+
+		vt.totalDur += duration
+	}
+
+	log.Printf("Video loaded: %d samples, duration %v", len(vt.samples), vt.totalDur)
 
 	return nil
 }
 
-func (vt *StaticVideoTrack) ReadDuration(filePath string) error {
-	// Count total frames to calculate duration
-	fileDuration, err := os.Open(filePath)
-	if err != nil {
-		return err
+// avccToAnnexB converts AVCC format (length-prefixed) to Annex B format (start codes)
+func (vt *StaticVideoTrack) avccToAnnexB(avccData []byte, isIDR bool) []byte {
+	var result bytes.Buffer
+	startCode := []byte{0x00, 0x00, 0x00, 0x01}
+
+	// Prepend SPS and PPS for IDR frames (keyframes)
+	if isIDR {
+		result.Write(startCode)
+		result.Write(vt.sps)
+		result.Write(startCode)
+		result.Write(vt.pps)
 	}
-	defer fileDuration.Close()
-	readerDuration, err := h264reader.NewReader(fileDuration)
-	if err != nil {
-		return err
-	}
-	totalFrames := int64(0)
-	for {
-		nal, err := readerDuration.NextNAL()
-		if err == io.EOF {
+
+	// Parse AVCC NAL units (4-byte length prefix)
+	offset := 0
+	for offset < len(avccData) {
+		if offset+4 > len(avccData) {
 			break
 		}
-		nalUnitType := nal.Data[0] & 0x1F
-		if nalUnitType == 1 || nalUnitType == 5 {
-			totalFrames++
+
+		nalLength := int(binary.BigEndian.Uint32(avccData[offset:]))
+		offset += 4
+
+		if offset+nalLength > len(avccData) {
+			log.Printf("Warning: NAL length exceeds data bounds")
+			break
 		}
+
+		result.Write(startCode)
+		result.Write(avccData[offset : offset+nalLength])
+		offset += nalLength
 	}
-	vt.totalDur = time.Duration(totalFrames) * vt.frameDur
-	return nil
+
+	return result.Bytes()
 }
 
 func (vt *StaticVideoTrack) Play() {
@@ -150,50 +259,35 @@ func (vt *StaticVideoTrack) Seek(position time.Duration) error {
 	vt.mu.Lock()
 	defer vt.mu.Unlock()
 
-	if vt.file == nil || vt.reader == nil {
+	if len(vt.samples) == 0 {
 		return fmt.Errorf("no video loaded")
 	}
 
-	if _, err := vt.file.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("failed to seek file: %w", err)
+	// Find the sample at the target position (seek to nearest keyframe before)
+	targetPos := time.Duration(0)
+	targetIdx := 0
+	lastKeyframeIdx := 0
+
+	for i, sample := range vt.samples {
+		if sample.IsSync {
+			lastKeyframeIdx = i
+		}
+		if targetPos+sample.Duration > position {
+			targetIdx = lastKeyframeIdx
+			break
+		}
+		targetPos += sample.Duration
 	}
 
-	reader, err := h264reader.NewReader(vt.file)
-	if err != nil {
-		return fmt.Errorf("failed to recreate reader: %w", err)
+	// Calculate position at keyframe
+	vt.currentPos = 0
+	for i := 0; i < targetIdx; i++ {
+		vt.currentPos += vt.samples[i].Duration
 	}
-	vt.reader = reader
+	vt.currentIdx = targetIdx
 
-	targetFrame := int64(position / vt.frameDur)
-	currentFrame := int64(0)
-	lastKeyframe := int64(0)
-
-	for currentFrame < targetFrame {
-		nal, err := vt.reader.NextNAL()
-		if err != nil {
-			if err == io.EOF {
-				vt.currentPos = time.Duration(currentFrame) * vt.frameDur
-				vt.frameCount = currentFrame
-				return nil
-			}
-			return fmt.Errorf("failed to parse NAL while seeking: %w", err)
-		}
-
-		nalUnitType := nal.Data[0] & 0x1F
-		if nalUnitType == 5 { // IDR (keyframe)
-			lastKeyframe = currentFrame
-		}
-
-		if nalUnitType == 1 || nalUnitType == 5 {
-			currentFrame++
-		}
-	}
-
-	vt.currentPos = time.Duration(currentFrame) * vt.frameDur
-	vt.frameCount = currentFrame
-
-	log.Printf("Seeked to frame %d (%.2fs), last keyframe at %d",
-		currentFrame, vt.currentPos.Seconds(), lastKeyframe)
+	log.Printf("Seeked to sample %d (%.2fs), keyframe: %v",
+		targetIdx, vt.currentPos.Seconds(), vt.samples[targetIdx].IsSync)
 
 	return nil
 }
@@ -206,89 +300,55 @@ func (vt *StaticVideoTrack) GetPosition() time.Duration {
 
 func (vt *StaticVideoTrack) playInBackground() {
 	defer vt.playWait.Done()
-	ticker := time.NewTicker(vt.frameDur)
-	defer ticker.Stop()
 
-	var accessUnit [][]byte // Accumulate NALs for one access unit
+	log.Printf("Starting playback, total samples: %d", len(vt.samples))
 
 	for {
 		select {
 		case <-vt.ctx.Done():
 			return
 		case <-vt.playCtx.Done():
-			vt.playing = false
 			return
-		case <-ticker.C:
-			vt.mu.Lock()
-
-			if vt.reader == nil {
-				vt.mu.Unlock()
-				continue
-			}
-
-			nal, err := vt.reader.NextNAL()
-			if err != nil {
-				if err == io.EOF {
-					// Flush any remaining access unit
-					if len(accessUnit) > 0 {
-						frameData := aggregateNALs(accessUnit)
-						if err := vt.track.WriteSample(media.Sample{
-							Data:     frameData,
-							Duration: vt.frameDur,
-						}); err != nil {
-							fmt.Printf("Error writing final sample: %v\n", err)
-						}
-						vt.currentPos += vt.frameDur
-						vt.frameCount++
-						accessUnit = nil
-					}
-
-					log.Printf("Video playback finished (EOF) %s loop: %t", vt.currentPos.String(), vt.isLoop)
-					if vt.isLoop {
-						vt.file.Seek(0, io.SeekStart)
-						reader, _ := h264reader.NewReader(vt.file)
-						vt.reader = reader
-						vt.currentPos = 0
-						vt.frameCount = 0
-						accessUnit = nil
-						vt.mu.Unlock()
-						continue
-					} else {
-						vt.playing = false
-						vt.mu.Unlock()
-						return
-					}
-				}
-				log.Printf("Error reading NAL: %v\n", err)
-				vt.mu.Unlock()
-				continue
-			}
-
-			nalUnitType := nal.Data[0] & 0x1F
-
-			// Check if this NAL starts a new access unit (VCL NAL)
-			// NAL types 1 (coded slice), 5 (IDR slice) are VCL NALs
-			isVCL := nalUnitType == 1 || nalUnitType == 5
-
-			// If we have an access unit and encounter a new VCL NAL, write the previous one
-			if len(accessUnit) > 0 && isVCL {
-				frameData := aggregateNALs(accessUnit)
-				if err := vt.track.WriteSample(media.Sample{
-					Data:     frameData,
-					Duration: vt.frameDur,
-				}); err != nil {
-					fmt.Printf("Error writing sample: %v\n", err)
-				}
-				vt.currentPos += vt.frameDur
-				vt.frameCount++
-				accessUnit = nil
-			}
-
-			// Accumulate NAL in current access unit
-			accessUnit = append(accessUnit, nal.Data)
-
-			vt.mu.Unlock()
+		default:
 		}
+
+		vt.mu.Lock()
+
+		if vt.currentIdx >= len(vt.samples) {
+			if vt.isLoop {
+				log.Printf("Video playback finished, looping")
+				vt.currentIdx = 0
+				vt.currentPos = 0
+				vt.mu.Unlock()
+				continue
+			} else {
+				vt.playing = false
+				vt.mu.Unlock()
+				return
+			}
+		}
+
+		sample := vt.samples[vt.currentIdx]
+		idx := vt.currentIdx
+
+		if err := vt.track.WriteSample(media.Sample{
+			Data:     sample.Data,
+			Duration: sample.Duration,
+		}); err != nil && err != io.ErrClosedPipe {
+			log.Printf("Error writing sample: %v", err)
+		}
+
+		vt.currentPos += sample.Duration
+		vt.currentIdx++
+
+		if idx%100 == 0 {
+			log.Printf("Sent sample %d/%d, pos: %v", idx, len(vt.samples), vt.currentPos)
+		}
+
+		vt.mu.Unlock()
+
+		// Wait for frame duration
+		time.Sleep(sample.Duration)
 	}
 }
 
@@ -311,50 +371,46 @@ func (vt *StaticVideoTrack) Close() error {
 		vt.playCancel = nil
 	}
 	vt.playing = false
-
-	if vt.file != nil {
-		return vt.file.Close()
-	}
 	return nil
 }
 func (vt *StaticVideoTrack) PlayFrame() {
 	vt.mu.Lock()
 	defer vt.mu.Unlock()
 
-	if vt.reader == nil {
-		return
-	}
+	// if vt.reader == nil {
+	// 	return
+	// }
 
-	nal, err := vt.reader.NextNAL()
-	if err != nil {
-		if err == io.EOF {
-			return
-		}
-		fmt.Printf("Error reading NAL: %v\n", err)
-		return
-	}
+	// nal, err := vt.reader.NextNAL()
+	// if err != nil {
+	// 	if err == io.EOF {
+	// 		return
+	// 	}
+	// 	fmt.Printf("Error reading NAL: %v\n", err)
+	// 	return
+	// }
 
-	if err := vt.track.WriteSample(media.Sample{
-		Data:     nal.Data,
-		Duration: vt.frameDur,
-	}); err != nil {
-		fmt.Printf("Error writing sample: %v\n", err)
-	}
+	// if err := vt.track.WriteSample(media.Sample{
+	// 	Data:     nal.Data,
+	// 	Duration: vt.frameDur,
+	// }); err != nil {
+	// 	fmt.Printf("Error writing sample: %v\n", err)
+	// }
 
-	nalUnitType := nal.Data[0] & 0x1F
-	if nalUnitType == 1 || nalUnitType == 5 {
-		vt.currentPos += vt.frameDur
-	}
+	// nalUnitType := nal.Data[0] & 0x1F
+	// if nalUnitType == 1 || nalUnitType == 5 {
+	// 	vt.currentPos += vt.frameDur
+	// }
 }
 
 func (vt *StaticVideoTrack) PlayBackFrame() {
-	previousPos := vt.currentPos - vt.frameDur*2
-	if previousPos < 0 {
-		previousPos = 0
-	}
-	if err := vt.Seek(previousPos); err != nil {
-		fmt.Printf("Error seeking back: %v\n", err)
-		return
-	}
-	vt.PlayFrame()
+	// previousPos := vt.currentPos - vt.frameDur*2
+	// if previousPos < 0 {
+	// 	previousPos = 0
+	// }
+	// if err := vt.Seek(previousPos); err != nil {
+	// 	fmt.Printf("Error seeking back: %v\n", err)
+	// 	return
+	// }
+	// vt.PlayFrame()
 }
